@@ -15,8 +15,24 @@ declare_id!("DfPLBwWW72YKYt81eVUznE1amapTtXroFGTdGqHo1Ttf");
 pub mod solora {
     use super::*;
 
-    pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
-        initialize::handler(ctx)
+    pub fn initialize_wallet(
+        ctx: Context<InitializeWallet>,
+        max_trade_size_usdc: u64,
+        max_slippage_bps: u16,
+    ) -> Result<()> {
+        let wallet = &mut ctx.accounts.solora_wallet;
+        wallet.authority = ctx.accounts.authority.key();
+        wallet.enclave_signer = Pubkey::default();
+        wallet.is_active = true;
+        wallet.policy = Policy {
+            max_trade_size_usdc,
+            max_slippage_bps,
+        };
+
+        msg!("Solora Wallet Initialized for Authority: {}", wallet.authority);
+        msg!("AI Policy Enforced - Max Trade: ${}, Max Slippage: {} bps", max_trade_size_usdc, max_slippage_bps);
+
+        Ok(())
     }
 }
 
