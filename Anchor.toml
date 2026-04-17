@@ -12,7 +12,4 @@ solora = "DfPLBwWW72YKYt81eVUznE1amapTtXroFGTdGqHo1Ttf"
 cluster = "localnet"
 wallet = "~/.config/solana/id.json"
 
-[scripts]
-test = "cargo test"
-
 [hooks]
