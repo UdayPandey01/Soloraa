@@ -1,0 +1,50 @@
+[package]
+name = "solora_enclave"
+version = "0.1.0"
+authors = ["Uday Pandey"]
+edition = "2021"
+
+[dependencies]
+ink = { version = "4.3.0", default-features = false }
+
+scale = { package = "parity-scale-codec", version = "3", default-features = false, features = [
+    "derive",
+] }
+scale-info = { version = "2.11", default-features = false, features = [
+    "derive",
+], optional = true }
+
+pink-extension = { version = "0.5", default-features = false }
+pink-json = { version = "0.4", default-features = false }
+
+ed25519-dalek = { version = "2.2.0", default-features = false, features = [
+    "alloc",
+] }
+rand_core = { version = "0.6.4", default-features = false }
+serde = { version = "1.0", default-features = false, features = [
+    "derive",
+    "alloc",
+] }
+base64ct = { version = "1.6", default-features = false, features = ["alloc"] }
+hex = { version = "0.4", default-features = false, features = ["alloc"] }
+
+[dev-dependencies]
+ink_e2e = { version = "4.3.0" }
+
+[lib]
+path = "lib.rs"
+
+[features]
+default = ["std"]
+std = [
+    "ink/std",
+    "scale/std",
+    "scale-info/std",
+    "pink-extension/std",
+    "pink-json/std",
+    "serde/std",
+    "base64ct/std",
+    "hex/std",
+]
+ink-as-dependency = []
+e2e-tests = []

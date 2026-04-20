@@ -1,7 +1,5 @@
 [workspace]
-members = [
-    "programs/*"
-]
+members = ["programs/*", "solora_enclave"]
 resolver = "2"
 
 [profile.release]
