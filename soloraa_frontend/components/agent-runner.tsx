@@ -66,9 +66,7 @@ export function AgentRunner({ agent }: AgentRunnerProps) {
     const timeouts = useRef<ReturnType<typeof setTimeout>[]>([]);
     const cancelRef = useRef(false);
     const [delegationOpen, setDelegationOpen] = useState(false);
-    const [delegatedAmountUsdc, setDelegatedAmountUsdc] = useState(
-        Math.min(agent.config.capitalUsdcMax, Math.max(agent.config.capitalUsdcMin, 2500))
-    );
+    const [delegatedAmountUsdc, setDelegatedAmountUsdc] = useState(0);
     const [approvalStatus, setApprovalStatus] = useState<ApprovalStatus>("idle");
     const [approvalReceipt, setApprovalReceipt] = useState<DevnetReceipt | null>(null);
     const [approvalError, setApprovalError] = useState<string | undefined>();
@@ -150,7 +148,7 @@ export function AgentRunner({ agent }: AgentRunnerProps) {
                 Math.max(60, agent.riskScore * 45);
             const walletShort = `${walletPda.slice(0, 4)}…${walletPda.slice(-4)}`;
 
-            schedule(120, () => {
+            schedule(300, () => {
                 setStage("intent", "active");
                 appendEvent(
                     ev(
@@ -160,9 +158,9 @@ export function AgentRunner({ agent }: AgentRunnerProps) {
                     )
                 );
             });
-            schedule(640, () => setStage("intent", "ok"));
+            schedule(1500, () => setStage("intent", "ok"));
 
-            schedule(720, () => {
+            schedule(1700, () => {
                 setStage("policy", "active");
                 appendEvent(
                     ev(
@@ -172,9 +170,9 @@ export function AgentRunner({ agent }: AgentRunnerProps) {
                     )
                 );
             });
-            schedule(1340, () => setStage("policy", "ok"));
+            schedule(3200, () => setStage("policy", "ok"));
 
-            schedule(1440, () => {
+            schedule(3400, () => {
                 setStage("oracle", "active");
                 appendEvent(
                     ev(
@@ -184,9 +182,9 @@ export function AgentRunner({ agent }: AgentRunnerProps) {
                     )
                 );
             });
-            schedule(2280, () => setStage("oracle", "ok"));
+            schedule(5200, () => setStage("oracle", "ok"));
 
-            schedule(2380, () => {
+            schedule(5400, () => {
                 setStage("build", "active");
                 appendEvent(
                     ev(
@@ -199,9 +197,9 @@ export function AgentRunner({ agent }: AgentRunnerProps) {
                     )
                 );
             });
-            schedule(3060, () => setStage("build", "ok"));
+            schedule(7000, () => setStage("build", "ok"));
 
-            schedule(3180, () => {
+            schedule(7200, () => {
                 setStage("sign", "active");
                 appendEvent(
                     ev(
@@ -214,9 +212,9 @@ export function AgentRunner({ agent }: AgentRunnerProps) {
                     )
                 );
             });
-            schedule(3960, () => setStage("sign", "ok"));
+            schedule(9000, () => setStage("sign", "ok"));
 
-            schedule(4080, () => {
+            schedule(9200, () => {
                 setStage("broadcast", "active");
                 appendEvent(
                     ev(
@@ -226,9 +224,9 @@ export function AgentRunner({ agent }: AgentRunnerProps) {
                     )
                 );
             });
-            schedule(4860, () => setStage("broadcast", "ok"));
+            schedule(11000, () => setStage("broadcast", "ok"));
 
-            schedule(4980, () => {
+            schedule(11200, () => {
                 setStage("verify", "active");
                 appendEvent(
                     ev(
@@ -239,9 +237,7 @@ export function AgentRunner({ agent }: AgentRunnerProps) {
                 );
             });
 
-            // After the mock pipeline finishes (~5.6s), play the real
-            // devnet legs sequentially. Each one is a confirmed memo tx.
-            schedule(5700, () => {
+            schedule(13000, () => {
                 setStage("verify", "ok");
                 appendEvent(
                     ev(
@@ -412,9 +408,7 @@ export function AgentRunner({ agent }: AgentRunnerProps) {
         setDelegationOpen(false);
         setExecutionReceipts([]);
         setUtilizedCapital(0);
-        setDelegatedAmountUsdc(
-            Math.min(agent.config.capitalUsdcMax, Math.max(agent.config.capitalUsdcMin, 2500))
-        );
+        setDelegatedAmountUsdc(0);
         reset();
     };
 
@@ -601,7 +595,7 @@ export function AgentRunner({ agent }: AgentRunnerProps) {
                 onAmountChange={(amount) => {
                     const clamped = Math.min(
                         agent.config.capitalUsdcMax,
-                        Math.max(agent.config.capitalUsdcMin, amount)
+                        Math.max(0, amount)
                     );
                     setDelegatedAmountUsdc(clamped);
                 }}

@@ -42,7 +42,7 @@ export function DelegationModal({
     onConnectWallet,
     onAmountChange,
 }: DelegationModalProps) {
-    const amountMin = agent.config.capitalUsdcMin;
+    const amountMin = 0;
     const amountMax = Math.min(agent.config.capitalUsdcMax, 25_000);
     const maxLossBps = agent.config.stopLossBpsDefault || Math.max(60, agent.riskScore * 45);
     const estimatedRisk = `${agent.riskScore}/5`;
