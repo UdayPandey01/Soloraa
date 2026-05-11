@@ -91,10 +91,10 @@ export function Nav() {
             <AnimatePresence>
                 {mobileOpen && (
                     <motion.div
-                        initial={{ opacity: 0, y: -6 }}
+                        initial={{ opacity: 0, y: -4 }}
                         animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -6 }}
-                        transition={{ duration: 0.18 }}
+                        exit={{ opacity: 0, y: -4 }}
+                        transition={{ duration: 0.1, ease: "easeOut" }}
                         className="md:hidden border-t border-line/60 bg-bg/95 backdrop-blur-xl"
                     >
                         <nav className="mx-auto max-w-7xl px-4 py-3 grid gap-1">

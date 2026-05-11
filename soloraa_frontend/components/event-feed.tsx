@@ -39,10 +39,10 @@ export function EventFeed({ events, newestFirst = true }: EventFeedProps) {
                     <motion.li
                         key={event.id}
                         layout
-                        initial={{ opacity: 0, y: 6 }}
+                        initial={{ opacity: 0, y: 4 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0 }}
-                        transition={{ duration: 0.25, ease: [0.21, 1.02, 0.73, 1] }}
+                        transition={{ duration: 0.14, ease: "easeOut" }}
                         className={cn(
                             "rounded-lg border px-4 py-3.5",
                             event.rejected
