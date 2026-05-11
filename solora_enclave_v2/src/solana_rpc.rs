@@ -1,11 +1,4 @@
-//! Trait + HTTP impl for the small slice of Solana JSON-RPC the enclave needs.
-//!
-//! The enclave fetches:
-//!   - the wallet PDA's raw account bytes (to read nonce + enclave_signer + policy).
-//!   - the `SysvarS1otHashes...` account's raw bytes (to bind a recent blockhash).
-//!
-//! `SolanaRpc` is a trait so integration tests can inject canned responses
-//! without touching the network.
+
 
 use async_trait::async_trait;
 use serde::Deserialize;
@@ -16,13 +9,11 @@ pub const SLOT_HASHES_SYSVAR_BASE58: &str = "SysvarS1otHashes1111111111111111111
 
 #[async_trait]
 pub trait SolanaRpc: Send + Sync {
-    /// Fetch raw `data` bytes for the given account address. Returns Ok(None)
-    /// if the RPC reports the account does not exist.
+
     async fn get_account_data(&self, address_base58: &str) -> EnclaveResult<Option<Vec<u8>>>;
 
-    /// Convenience: read SlotHashes and return the most recent (slot, hash) pair.
-    /// SlotHashes layout: u64 LE count, then count * (u64 LE slot, [u8;32] hash),
-    /// sorted DESC by slot.
+
+
     async fn get_most_recent_slot_hash(&self) -> EnclaveResult<(u64, [u8; 32])> {
         let data = self
             .get_account_data(SLOT_HASHES_SYSVAR_BASE58)
@@ -132,7 +123,6 @@ pub mod test_support {
     use std::collections::HashMap;
     use std::sync::Mutex;
 
-    /// In-memory RPC for unit and integration tests.
     pub struct InMemoryRpc {
         accounts: Mutex<HashMap<String, Vec<u8>>>,
     }

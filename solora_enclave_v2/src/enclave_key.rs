@@ -1,22 +1,4 @@
-//! Enclave-held Ed25519 key.
-//!
-//! `KeyStorage` is the persistence seam. Today there is one impl — file on
-//! disk — used during local development and CI. In production the same trait
-//! is satisfied by an enclave-sealed implementation:
-//!   - **AWS Nitro**: NSM-encrypted blob written to an attached EBS volume.
-//!     Decryption requires running inside the same enclave measurement
-//!     (PCRs match), which means an attacker who steals the blob cannot
-//!     decrypt it outside the enclave.
-//!   - **Marlin Oyster**: Marlin's KMS-style derive-key-from-attestation
-//!     primitive: the key is derived from the enclave measurement and never
-//!     leaves the enclave.
-//!
-//! For both, the trait surface stays `load() -> Option<bytes>` /
-//! `store(&bytes)`. The unsealing happens inside the impl; callers see plain
-//! bytes only inside the enclave's address space.
-//!
-//! NEVER instantiate `FileKeyStorage` in production. The `unsafe-file-storage`
-//! cfg + log warning are the seatbelt.
+
 
 use ed25519_dalek::{SigningKey, VerifyingKey, SECRET_KEY_LENGTH};
 use rand::rngs::OsRng;
@@ -34,9 +16,8 @@ pub struct EnclaveKey {
 }
 
 impl EnclaveKey {
-    /// Load an existing key via storage; if none, generate a fresh one and
-    /// persist it. The `OsRng` pull is the enclave's RNG seam — Nitro/Marlin
-    /// expose hardware RNG syscalls underneath in production builds.
+
+
     pub fn load_or_generate<S: KeyStorage>(storage: &S) -> EnclaveResult<Self> {
         if let Some(secret) = storage.load()? {
             let signing_key = SigningKey::from_bytes(&secret);
@@ -63,7 +44,6 @@ impl EnclaveKey {
     }
 }
 
-/// File-backed storage for development. **Do not deploy this to production.**
 pub struct FileKeyStorage {
     path: PathBuf,
 }
@@ -101,7 +81,7 @@ impl KeyStorage for FileKeyStorage {
             }
         }
         std::fs::write(&self.path, secret)?;
-        // Best-effort tighten file mode on unix.
+
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
@@ -112,7 +92,6 @@ impl KeyStorage for FileKeyStorage {
     }
 }
 
-/// In-memory storage useful in tests so we don't touch the filesystem.
 pub struct InMemoryKeyStorage {
     inner: std::sync::Mutex<Option<[u8; SECRET_KEY_LENGTH]>>,
 }

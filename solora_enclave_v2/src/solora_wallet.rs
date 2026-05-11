@@ -1,7 +1,4 @@
-//! Zero-copy decode of the on-chain `SoloraWallet` account.
-//!
-//! Layout MUST match `programs/solora/src/state.rs`. The struct is 616 bytes
-//! after the 8-byte Anchor discriminator.
+
 
 use bytemuck::{Pod, Zeroable};
 
@@ -10,7 +7,6 @@ use crate::error::{EnclaveError, EnclaveResult};
 pub const ANCHOR_DISCRIMINATOR_LEN: usize = 8;
 pub const MAX_ALLOWED_PROGRAMS: usize = 16;
 
-/// `sha256("account:SoloraWallet")[..8]`.
 pub const SOLORA_WALLET_DISCRIMINATOR: [u8; 8] = [170, 18, 86, 95, 106, 12, 175, 27];
 
 #[repr(C)]
@@ -38,8 +34,7 @@ pub struct SoloraWallet {
 impl SoloraWallet {
     pub const SIZE: usize = core::mem::size_of::<Self>();
 
-    /// Verify the discriminator and bytemuck-cast the rest. The returned reference
-    /// borrows `data` directly — no allocation, no copy.
+
     pub fn from_account_data(data: &[u8]) -> EnclaveResult<&Self> {
         let total_needed = ANCHOR_DISCRIMINATOR_LEN + Self::SIZE;
         if data.len() < total_needed {
@@ -124,7 +119,7 @@ mod tests {
 
     #[test]
     fn struct_size_matches_chain_layout() {
-        // 32 + 32 + (8 + 512 + 2 + 1 + 5) + 8 + 8 + 1 + 7 = 616
+
         assert_eq!(core::mem::size_of::<Policy>(), 528);
         assert_eq!(SoloraWallet::SIZE, 616);
     }

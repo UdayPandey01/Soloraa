@@ -226,8 +226,6 @@ fn decode_b58_pubkey(s: &str) -> Result<[u8; 32], EnclaveError> {
     Ok(out)
 }
 
-/// HTTP error wrapper. Maps every EnclaveError to a 4xx/5xx with a stable
-/// JSON body `{"error": "<kind>", "detail": "<msg>"}`.
 struct ApiError(EnclaveError);
 
 impl From<EnclaveError> for ApiError {

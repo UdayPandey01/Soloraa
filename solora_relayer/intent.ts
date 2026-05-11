@@ -30,15 +30,15 @@ export function buildIntentMessage(input: IntentMessageInput): Buffer {
         );
     }
     const buf = Buffer.alloc(INTENT_MSG_LEN);
-    INTENT_DOMAIN.copy(buf, 0);                                   // 0..16
-    Buffer.from(input.programId.toBuffer()).copy(buf, 16);        // 16..48
-    Buffer.from(input.walletPda.toBuffer()).copy(buf, 48);        // 48..80
-    buf.writeBigUInt64LE(input.nonce, 80);                        // 80..88
-    buf.writeBigUInt64LE(input.expirySlot, 88);                   // 88..96
-    input.recentBlockhash.copy(buf, 96);                          // 96..128
-    buf.writeBigUInt64LE(input.blockhashSlot, 128);               // 128..136
-    buf.writeUInt8(input.kind, 136);                              // 136
-    input.payloadHash.copy(buf, 137);                             // 137..169
+    INTENT_DOMAIN.copy(buf, 0);
+    Buffer.from(input.programId.toBuffer()).copy(buf, 16);
+    Buffer.from(input.walletPda.toBuffer()).copy(buf, 48);
+    buf.writeBigUInt64LE(input.nonce, 80);
+    buf.writeBigUInt64LE(input.expirySlot, 88);
+    input.recentBlockhash.copy(buf, 96);
+    buf.writeBigUInt64LE(input.blockhashSlot, 128);
+    buf.writeUInt8(input.kind, 136);
+    input.payloadHash.copy(buf, 137);
     return buf;
 }
 
@@ -83,14 +83,6 @@ export const SLOT_HASHES_SYSVAR_ID = new PublicKey(
     "SysvarS1otHashes111111111111111111111111111"
 );
 
-/**
- * Read the SlotHashes sysvar account and return the most recent (slot, hash) entry.
- * SlotHashes is bincode-encoded: u64 length then `length` * (u64 slot + 32-byte hash),
- * sorted by slot DESC (most recent first).
- *
- * The on-chain verifier binary-searches this same data; using the most recent entry
- * maximizes the time window the signed intent stays valid (~3.5 min).
- */
 export function parseMostRecentSlotHash(data: Buffer): { slot: bigint; hash: Buffer } {
     if (data.length < 8) {
         throw new Error(`SlotHashes data too short: ${data.length} bytes`);

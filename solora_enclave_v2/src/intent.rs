@@ -1,7 +1,4 @@
-//! Canonical SOLORA_INTENT_V2 message + payload hashing.
-//!
-//! Every byte here MUST match `programs/solora/src/state.rs` and
-//! `solora_relayer/intent.ts`. The on-chain verifier rejects any deviation.
+
 
 use sha2::{Digest, Sha256};
 
@@ -43,8 +40,6 @@ pub fn build_intent_message(input: IntentMessageInputs<'_>) -> [u8; INTENT_MSG_L
     buf
 }
 
-/// Sanity check used at API boundaries: bytes must already be the canonical
-/// 169-byte length.
 pub fn require_canonical_msg_len(msg: &[u8]) -> EnclaveResult<()> {
     if msg.len() != INTENT_MSG_LEN {
         return Err(EnclaveError::IntentMsgWrongSize(msg.len()));

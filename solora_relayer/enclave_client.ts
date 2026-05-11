@@ -1,24 +1,11 @@
-/**
- * `EnclaveClient` is the seam between the relayer and any enclave (mock or real).
- *
- * The mock enclave used to sign raw bytes; the real enclave (`solora_enclave_v2`)
- * builds the canonical SOLORA_INTENT_V2 message internally so a compromised
- * relayer cannot trick it into signing arbitrary content. Both expose the same
- * shape:
- *
- *   getPubkey()                                  -> Promise<Uint8Array(32)>
- *   signTransferIntent({ walletPda, ... })       -> Promise<{ message, signature, pubkey }>
- *   signTradeIntent({ walletPda, ... })          -> Promise<{ message, signature, pubkey }>
- *
- * The relayer treats `message` as opaque bytes for the Ed25519 instruction.
- */
+
 
 import type { PublicKey } from "@solana/web3.js";
 
 export interface SignedIntent {
-    message: Uint8Array;     // 169 bytes (canonical SOLORA_INTENT_V2)
-    signature: Uint8Array;   // 64 bytes
-    pubkey: Uint8Array;      // 32 bytes
+    message: Uint8Array;
+    signature: Uint8Array;
+    pubkey: Uint8Array;
 }
 
 export interface SignTransferRequest {
@@ -53,11 +40,6 @@ export interface EnclaveClient {
     signTradeIntent(req: SignTradeRequest): Promise<SignedIntent>;
 }
 
-/**
- * HTTP client for the real Rust + Axum enclave (`solora_enclave_v2`).
- * Talks JSON over the network — in production, hits the Marlin/Nitro
- * vsock-proxy that fronts the enclave.
- */
 export class HttpEnclaveClient implements EnclaveClient {
     constructor(private readonly baseUrl: string) {}
 

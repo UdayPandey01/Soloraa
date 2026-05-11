@@ -2,11 +2,6 @@ import * as fs from "fs";
 import * as path from "path";
 import nacl from "tweetnacl";
 
-/**
- * MockEnclave stands in for a real Marlin Oyster CVM. The interface mirrors what
- * the production enclave will expose: take an opaque message, return an Ed25519
- * signature over it plus the verifying key. Swap the impl, keep the surface.
- */
 export class MockEnclave {
     private readonly secretKey: Uint8Array;
     public readonly publicKey: Uint8Array;

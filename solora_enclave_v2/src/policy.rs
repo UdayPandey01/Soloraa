@@ -1,13 +1,4 @@
-//! End-to-end intent decision: fetch wallet state, fetch oracle, run policy
-//! checks, build canonical message, sign.
-//!
-//! This is where the enclave's value lives. A compromised relayer can call
-//! /sign-* but cannot bypass:
-//!   - `is_active` check (wallet pause)
-//!   - `max_trade_size_usdc` ceiling
-//!   - `max_slippage_bps` ceiling (after oracle-derived slippage compute)
-//!   - allowlist check for arbitrary CPI
-//!   - intent kind / payload binding (signed message includes payload_hash)
+
 
 use crate::error::{EnclaveError, EnclaveResult};
 use crate::intent::{
@@ -26,9 +17,6 @@ pub struct SignedIntent {
     pub pubkey: [u8; 32],
 }
 
-/// What the enclave's pubkey was at signing time. The relayer compares this
-/// to the on-chain `wallet.enclave_signer` before broadcasting; mismatches
-/// mean the user must `register_enclave` first.
 pub struct DecisionContext<'a> {
     pub program_id: [u8; 32],
     pub wallet_pda_base58: &'a str,
@@ -79,10 +67,8 @@ impl<'a> PolicyEngine<'a> {
             return Err(EnclaveError::WalletPaused);
         }
         // For a pure transfer there's no oracle stage, but we still respect
-        // the trade-size cap as a coarse bound (interpreting the lamport
-        // amount as USDC-equivalent at the policy granularity is up to the
-        // operator; here we ignore — transfers are "moving funds you already
-        // own" and the cap is enforced on USDC-denominated trades).
+
+
 
         let (bh_slot, recent_blockhash) = self.rpc.get_most_recent_slot_hash().await?;
         let payload_hash = transfer_payload_hash(&req.destination, req.amount_lamports);

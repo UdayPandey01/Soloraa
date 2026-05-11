@@ -6,8 +6,6 @@ use crate::pyth::PythHermesClient;
 use crate::solana_rpc::SolanaRpc;
 use crate::wormhole::GuardianSet;
 
-/// Bundle of dependencies shared by every Axum handler. Trait objects let
-/// integration tests inject in-memory fakes without touching the network.
 pub struct AppState {
     pub key: Arc<EnclaveKey>,
     pub program_id: [u8; 32],

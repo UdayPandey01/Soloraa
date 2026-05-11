@@ -31,13 +31,11 @@ async function main() {
 
     console.log("\n=== Solora relayer smoke test (offline) ===\n");
 
-    // 1. Mock enclave loads + has a 32-byte pubkey
     console.log("[1] MockEnclave");
     const enclavePath = path.resolve(process.cwd(), "solora_relayer/mock_enclave.json");
     const enclave = MockEnclave.fromFile(enclavePath);
     check(enclave.publicKey.length === 32, "enclave.publicKey is 32 bytes");
 
-    // 2. Intent message build matches the on-chain canonical layout
     console.log("\n[2] Intent message");
     const programId = new web3.PublicKey("DfPLBwWW72YKYt81eVUznE1amapTtXroFGTdGqHo1Ttf");
     const walletPda = web3.PublicKey.findProgramAddressSync(
@@ -87,7 +85,6 @@ async function main() {
         "payload_hash at bytes 137..169"
     );
 
-    // Synthetic SlotHashes blob: u64 count=1, then (slot=9999, hash=[0xAB; 32])
     const fakeSlotHashes = Buffer.alloc(8 + 8 + 32);
     fakeSlotHashes.writeBigUInt64LE(1n, 0);
     fakeSlotHashes.writeBigUInt64LE(9999n, 8);
@@ -95,7 +92,6 @@ async function main() {
     const parsed = parseMostRecentSlotHash(fakeSlotHashes);
     check(parsed.slot === 9999n && parsed.hash.equals(recentBlockhash), "parseMostRecentSlotHash");
 
-    // 3. Sign / verify roundtrip
     console.log("\n[3] Sign / verify");
     const signature = enclave.sign(message);
     check(signature.length === 64, "signature is 64 bytes");
@@ -104,7 +100,6 @@ async function main() {
         "ed25519 signature verifies against the enclave pubkey"
     );
 
-    // 4. Ed25519Program instruction layout matches the on-chain parser
     console.log("\n[4] Ed25519Program ix layout");
     const ed25519Ix = web3.Ed25519Program.createInstructionWithPublicKey({
         publicKey: enclave.publicKey,
@@ -139,7 +134,6 @@ async function main() {
         "message bytes at msg_offset"
     );
 
-    // 5. IDL parses with @coral-xyz/anchor
     console.log("\n[5] IDL parse via @coral-xyz/anchor");
     const idlPath = path.resolve(process.cwd(), "solora_relayer/solora.json");
     const idl = JSON.parse(fs.readFileSync(idlPath, "utf8"));
@@ -180,10 +174,8 @@ async function main() {
         Object.keys((program.account as any)).includes("soloraWallet"),
         "account namespace exposes soloraWallet"
     );
-    // Note: MeasurementRegistry is intentionally absent from program.account
-    // because Anchor 0.32.1's TS client can't size types containing
-    // arrays-of-defined-types. Clients that need to fetch the registry use
-    // raw connection.getAccountInfo + manual byte parsing (see ops.ts).
+
+
 
     console.log(`\n=== ${pass} pass, ${fail} fail ===\n`);
     if (fail > 0) process.exit(1);

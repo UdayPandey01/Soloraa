@@ -1,13 +1,4 @@
-//! End-to-end integration: spin up the Axum app with in-memory Solana RPC + a
-//! synthetic Pyth/Wormhole guardian set, and exercise the same JSON contract
-//! the relayer will hit.
-//!
-//! Goals:
-//!   - Prove the signing path produces a verifiable Ed25519 signature over
-//!     the canonical 169-byte SOLORA_INTENT_V2 message.
-//!   - Prove every policy gate (paused, oversize trade, slippage, allowlist,
-//!     malformed VAA, insufficient quorum) returns a structured 4xx without
-//!     leaking the wallet key.
+
 
 use std::sync::Arc;
 
@@ -34,7 +25,7 @@ use tower::ServiceExt;
 
 const PROGRAM_ID: [u8; 32] = [11u8; 32];
 const WALLET_PDA: [u8; 32] = [22u8; 32];
-const ENCLAVE_SIGNER_HINT: [u8; 32] = [33u8; 32]; // overwritten with real pubkey
+const ENCLAVE_SIGNER_HINT: [u8; 32] = [33u8; 32];
 const TARGET_PROGRAM: [u8; 32] = [44u8; 32];
 const DESTINATION: [u8; 32] = [55u8; 32];
 const FEED_ID: [u8; 32] = [0xAB; 32];
@@ -188,7 +179,7 @@ async fn transfer_intent_roundtrip_signature_verifies() {
 #[tokio::test]
 async fn transfer_rejected_when_wallet_paused() {
     let h = build_harness(&[]);
-    // Stomp the wallet account with is_active=0.
+
     let mut paused = SoloraWallet::zeroed();
     paused.authority = [0xAA; 32];
     paused.enclave_signer = h.enclave_pk;
@@ -254,8 +245,7 @@ fn build_trade_payload(
 async fn trade_intent_passes_with_valid_oracle() {
     let h = build_harness(&[TARGET_PROGRAM]);
     let feed_hex = hex::encode(FEED_ID);
-    // Oracle says 145 ± 0.5; buy → expected exec = 145.5; signed limit = 146.
-    // Slippage = (146 - 145.5)/146 = ~34 bps. Policy max = 50 bps. Pass.
+
     let msg = sample_price_message(145_00_000_000, 50_000_000);
     let bytes =
         build_accumulator_update_for_message(&h.guardians, &encode_price_feed_message(&msg));
@@ -287,7 +277,7 @@ async fn trade_intent_passes_with_valid_oracle() {
 
 #[tokio::test]
 async fn trade_rejected_when_target_not_allowlisted() {
-    let h = build_harness(&[]); // empty allowlist
+    let h = build_harness(&[]);
     let feed_hex = hex::encode(FEED_ID);
     let msg = sample_price_message(145_00_000_000, 50_000_000);
     let bytes =
@@ -349,7 +339,7 @@ async fn trade_rejected_when_trade_size_exceeds_policy() {
 async fn trade_rejected_on_excessive_slippage() {
     let h = build_harness(&[TARGET_PROGRAM]);
     let feed_hex = hex::encode(FEED_ID);
-    // Oracle 100 ± 0; buy expected exec = 100; signed limit = 90 → 1000 bps slippage.
+
     let msg = sample_price_message(100_00_000_000, 0);
     let bytes =
         build_accumulator_update_for_message(&h.guardians, &encode_price_feed_message(&msg));
@@ -381,7 +371,7 @@ async fn trade_rejected_when_vaa_tampered() {
     let msg = sample_price_message(145_00_000_000, 50_000_000);
     let mut bytes =
         build_accumulator_update_for_message(&h.guardians, &encode_price_feed_message(&msg));
-    // Flip a byte in the embedded message → merkle proof breaks.
+
     let last = bytes.len() - 1;
     bytes[last] ^= 0x01;
     h.hermes.set(&feed_hex, bytes);
@@ -414,8 +404,7 @@ async fn trade_rejected_when_quorum_not_met() {
         build_accumulator_update_for_message(&h.guardians, &encode_price_feed_message(&msg));
     h.hermes.set(&feed_hex, bytes);
 
-    // Create a different guardian set (different keys → no signature recovers
-    // to the configured addresses) and inject it.
+
     let imposters = make_test_guardians(7, 5);
     let app = {
         let storage = InMemoryKeyStorage::new();

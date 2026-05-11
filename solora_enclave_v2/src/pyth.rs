@@ -1,22 +1,4 @@
-//! Pyth Hermes client + accumulator update verification.
-//!
-//! Hermes (`https://hermes.pyth.network/v2/updates/price/latest`) returns a
-//! "PNAU" wrapper containing:
-//!   1. A Wormhole VAA whose payload is `[magic(4)|update_type(1)|merkle_root(20)|...]`.
-//!      The 20-byte merkle root is the cryptographic anchor.
-//!   2. One or more `MerklePriceUpdate` entries: a length-prefixed message + a
-//!      keccak160 merkle proof to the root.
-//!
-//! Verification flow:
-//!   - parse_accumulator_update -> { vaa_bytes, updates }
-//!   - verify the VAA via the guardian set (delegates to crate::wormhole)
-//!   - extract the 20-byte merkle root from the VAA payload
-//!   - for each requested feed_id: locate its update, verify its proof, decode
-//!     the PriceFeedMessage, and return (price, conf, expo)
-//!
-//! Hashes follow Pyth's `Keccak160` scheme:
-//!   leaf  = keccak256(0x00 || leaf_bytes)[..20]
-//!   node  = keccak256(0x01 || min(a,b) || max(a,b))[..20]   (sorted siblings)
+
 
 use async_trait::async_trait;
 use serde::Deserialize;
@@ -29,7 +11,7 @@ pub const PNAU_MAGIC: &[u8; 4] = b"PNAU";
 pub const ACCUMULATOR_UPDATE_TYPE_WORMHOLE_MERKLE: u8 = 0;
 pub const HASH_LEN: usize = 20;
 pub const MESSAGE_TYPE_PRICE_FEED: u8 = 0;
-pub const VAA_PAYLOAD_MAGIC: &[u8; 4] = b"AUWV"; // "AccumulatorUpdate-Wormhole-V1"
+pub const VAA_PAYLOAD_MAGIC: &[u8; 4] = b"AUWV";
 
 #[derive(Debug, Clone)]
 pub struct AccumulatorUpdate {
@@ -43,7 +25,6 @@ pub struct MerkleUpdate {
     pub proof: Vec<[u8; HASH_LEN]>,
 }
 
-/// Decoded `PriceFeedMessage`.
 #[derive(Debug, Clone)]
 pub struct PriceFeedMessage {
     pub feed_id: [u8; 32],
@@ -63,8 +44,6 @@ pub struct VerifiedPrice {
     pub publish_time: i64,
 }
 
-/// Public verification entry point. Takes the raw bytes Hermes returns plus the
-/// configured guardian set, and gives back a verified price for `feed_id`.
 pub fn verify_accumulator_update(
     bytes: &[u8],
     feed_id_hex: &str,
@@ -82,7 +61,7 @@ pub fn verify_accumulator_update(
     for entry in &update.updates {
         let leaf_hash = hash_leaf(&entry.message);
         if !verify_merkle_path(leaf_hash, &entry.proof, merkle_root) {
-            continue; // some entries may not be the one we want — keep scanning
+            continue;
         }
         let msg = parse_price_feed_message(&entry.message)?;
         if msg.feed_id != feed_id {
@@ -188,8 +167,7 @@ pub fn parse_accumulator_update(bytes: &[u8]) -> EnclaveResult<AccumulatorUpdate
 }
 
 fn extract_merkle_root_from_payload(payload: &[u8]) -> EnclaveResult<[u8; HASH_LEN]> {
-    // Layout: magic(4) || update_type(1) || slot(8) || ring_size(4) || merkle_root(20)
-    // We only care about the last field; magic + update_type are sanity-checked.
+
     if payload.len() < 4 + 1 + 8 + 4 + HASH_LEN {
         return Err(EnclaveError::VaaMalformed("vaa payload too short"));
     }
@@ -324,7 +302,7 @@ fn pow10_u128(n: u32) -> EnclaveResult<u128> {
 
 #[async_trait]
 pub trait PythHermesClient: Send + Sync {
-    /// Returns the raw accumulator update bytes (PNAU wrapper).
+
     async fn fetch_latest_update(&self, feed_id_hex: &str) -> EnclaveResult<Vec<u8>>;
 }
 
@@ -441,17 +419,15 @@ pub mod test_support {
         out
     }
 
-    /// Build a Pyth accumulator update with a one-leaf merkle tree, signed by
-    /// the supplied test guardian group. The proof is empty (the leaf IS the
-    /// root) which is valid Merkle for n=1.
+
+
     pub fn build_accumulator_update_for_message(
         group: &TestGuardianGroup,
         msg_bytes: &[u8],
     ) -> Vec<u8> {
         let leaf_hash = hash_leaf(msg_bytes);
-        let merkle_root = leaf_hash; // single leaf
+        let merkle_root = leaf_hash;
 
-        // VAA payload: magic(4) || update_type(1) || slot(8 BE) || ring_size(4 BE) || root(20)
         let mut payload = Vec::with_capacity(4 + 1 + 8 + 4 + HASH_LEN);
         payload.extend_from_slice(VAA_PAYLOAD_MAGIC);
         payload.push(ACCUMULATOR_UPDATE_TYPE_WORMHOLE_MERKLE);
@@ -470,19 +446,18 @@ pub mod test_support {
         };
         let vaa = build_signed_vaa(group, group.set.quorum(), &body);
 
-        // Wrap in PNAU.
         let mut wire = Vec::new();
         wire.extend_from_slice(PNAU_MAGIC);
-        wire.push(1u8); // major
-        wire.push(0u8); // minor
-        wire.push(0u8); // trailing_payload_size
+        wire.push(1u8);
+        wire.push(0u8);
+        wire.push(0u8);
         wire.push(ACCUMULATOR_UPDATE_TYPE_WORMHOLE_MERKLE);
         wire.extend_from_slice(&(vaa.len() as u16).to_be_bytes());
         wire.extend_from_slice(&vaa);
-        wire.push(1u8); // num_updates
+        wire.push(1u8);
         wire.extend_from_slice(&(msg_bytes.len() as u16).to_be_bytes());
         wire.extend_from_slice(msg_bytes);
-        wire.push(0u8); // num_proof = 0 (leaf is root)
+        wire.push(0u8);
         wire
     }
 }
@@ -528,8 +503,7 @@ mod tests {
         let msg_bytes = encode_price_feed_message(&msg);
         let mut bytes = build_accumulator_update_for_message(&group, &msg_bytes);
 
-        // Tamper the price byte inside the embedded message. Walk to the
-        // last update payload and flip a byte in it.
+
         let len = bytes.len();
         bytes[len - 10] ^= 0x01;
 
@@ -560,7 +534,6 @@ mod tests {
         let msg_bytes = encode_price_feed_message(&msg);
         let bytes = build_accumulator_update_for_message(&real, &msg_bytes);
 
-        // Imposter set has different addresses → no signature recovers correctly.
         let res = verify_accumulator_update(&bytes, &hex::encode(feed), &imposters.set);
         assert!(matches!(res, Err(EnclaveError::VaaQuorumNotMet { .. })));
     }

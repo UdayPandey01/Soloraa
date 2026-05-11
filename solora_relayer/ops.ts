@@ -83,8 +83,7 @@ async function main() {
     });
     anchor.setProvider(provider);
 
-    // Anchor 0.32+ takes (idl, provider). The IDL embeds the program id;
-    // the older 3-arg form misroutes provider into the size-resolution path.
+
     const program = new anchor.Program(loadIdl() as any, provider);
 
     const registryPda = web3.PublicKey.findProgramAddressSync(
@@ -629,12 +628,10 @@ async function main() {
         metric("tx_sent", 1, { op: "execute_transfer" });
 
         if (parsed.hasFlag("replay")) {
-            // Real on-chain replay: rebuild the wrapping tx with a FRESH blockhash
-            // but reuse the SAME signed intent. The original signature is bound to
-            // a now-stale wallet.nonce, so the program's verifier rejects with
-            // IntentNonceMismatch. A naive resubmit would just hit Solana's tx
-            // dedup (same signature → "already processed") which doesn't actually
-            // exercise the on-chain replay protection.
+
+
+
+
             try {
                 const replayTx = new web3.Transaction().add(...tx.instructions);
                 replayTx.feePayer = authority.publicKey;
@@ -843,9 +840,8 @@ async function main() {
             log("info", "wallet_exists", { wallet: walletPda.toBase58() });
         }
 
-        // Fund the wallet PDA above rent-exempt so subsequent transfers succeed.
-        // Solora's execute_transfer enforces post-transfer balance >= rent-exempt
-        // minimum; we top up to ~0.1 SOL so the demo can move 0.001 SOL freely.
+
+
         await tryOp(
             () => fundWalletPda(authority, walletPda, connection, BigInt(100_000_000), log, metric),
             log,
