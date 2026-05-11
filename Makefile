@@ -5,7 +5,7 @@ SHELL := /bin/bash
 .DEFAULT_GOAL := help
 .PHONY: help build sbf test test-program test-enclave smoke clippy idl localnet \
         keys airdrop demo-local enclave relayer compose-up compose-down clean \
-        verify
+        verify frontend-dev frontend-build frontend-install deploy-devnet
 
 help: ## List available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | sort | \
@@ -65,6 +65,19 @@ compose-down: ## docker-compose down
 
 verify: build test ## Belt-and-braces: build everything, run every test surface
 
+deploy-devnet: ## Build + deploy the on-chain program to Solana devnet
+	./scripts/deploy_devnet.sh
+
+frontend-install: ## Install Next.js frontend deps
+	npm --prefix soloraa_frontend install
+
+frontend-dev: ## Run the Next.js frontend in dev mode (http://localhost:3000)
+	npm --prefix soloraa_frontend run dev
+
+frontend-build: ## Production-build the Next.js frontend
+	npm --prefix soloraa_frontend run build
+
 clean: ## Wipe build + ledger artifacts (keeps keys/, mock_enclave.json)
 	rm -rf .localnet target/debug target/release target/sbf-solana-solana
 	rm -rf solora_enclave_v2/target solora_relayer/node_modules
+	rm -rf soloraa_frontend/.next soloraa_frontend/node_modules
