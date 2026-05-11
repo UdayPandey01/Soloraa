@@ -1,0 +1,80 @@
+version: "3.9"
+
+services:
+  validator:
+    image: ${SOLANA_IMAGE:-anza/solana:v2.1.0}
+    command:
+      - solana-test-validator
+      - --reset
+      - --ledger
+      - /ledger
+      - --rpc-port
+      - "8899"
+      - --bind-address
+      - 0.0.0.0
+    ports:
+      - "8899:8899"
+      - "8900:8900"
+    volumes:
+      - validator-ledger:/ledger
+    healthcheck:
+      test:
+        ["CMD", "solana", "cluster-version", "--url", "http://127.0.0.1:8899"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  enclave:
+    build: ./solora_enclave_v2
+    environment:
+      SOLORA_ENCLAVE_BIND: 0.0.0.0:8080
+      SOLORA_SOLANA_RPC: http://validator:8899
+      SOLORA_PROGRAM_ID: ${SOLORA_PROGRAM_ID:-DfPLBwWW72YKYt81eVUznE1amapTtXroFGTdGqHo1Ttf}
+      SOLORA_HERMES_URL: ${SOLORA_HERMES_URL:-https://hermes.pyth.network}
+    ports:
+      - "8080:8080"
+    volumes:
+      - enclave-data:/var/lib/solora
+    depends_on:
+      validator:
+        condition: service_healthy
+    healthcheck:
+      test:
+        ["CMD", "/bin/busybox", "wget", "-qO-", "http://127.0.0.1:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  relayer:
+    build:
+      context: .
+      dockerfile: solora_relayer/Dockerfile
+    environment:
+      SOLANA_RPC_URL: http://validator:8899
+      SOLORA_ENCLAVE_URL: http://enclave:8080
+      SOLANA_KEYPAIR_PATH: /keys/authority.json
+      SOLORA_GOVERNOR_KEYPAIR_PATH: /keys/governor.json
+      SOLORA_PROGRAM_ID: ${SOLORA_PROGRAM_ID:-DfPLBwWW72YKYt81eVUznE1amapTtXroFGTdGqHo1Ttf}
+      SOLORA_MEASUREMENT_HASH: ${SOLORA_MEASUREMENT_HASH:-}
+      SOLORA_PYTH_FEED_ID: ${SOLORA_PYTH_FEED_ID:-}
+    volumes:
+      - ./keys:/keys:ro
+      - ./target/idl:/app/target/idl:ro
+    depends_on:
+      validator:
+        condition: service_healthy
+      enclave:
+        condition: service_healthy
+    command:
+      [
+        "npx",
+        "--prefix",
+        "solora_relayer",
+        "tsx",
+        "solora_relayer/ops.ts",
+        "demo-local",
+      ]
+
+volumes:
+  validator-ledger:
+  enclave-data:

@@ -1,5 +1,6 @@
 [workspace]
-members = ["programs/*", "solora_enclave"]
+members = ["programs/*", "solora_enclave_v2", "solora_switchboard"]
+exclude = ["solora_enclave"]
 resolver = "2"
 
 [profile.release]

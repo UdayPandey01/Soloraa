@@ -1,0 +1,474 @@
+{
+  "address": "DfPLBwWW72YKYt81eVUznE1amapTtXroFGTdGqHo1Ttf",
+  "metadata": {
+    "name": "solora",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Solora — secure AI execution layer on Solana"
+  },
+  "instructions": [
+    {
+      "name": "init_measurement_registry",
+      "discriminator": [223, 48, 24, 179, 28, 204, 103, 7],
+      "accounts": [
+        {
+          "name": "registry",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              { "kind": "const", "value": [109, 101, 97, 115, 117, 114, 101, 109, 101, 110, 116, 95, 114, 101, 103, 105, 115, 116, 114, 121] }
+            ]
+          }
+        },
+        { "name": "governor", "writable": true, "signer": true },
+        { "name": "system_program", "address": "11111111111111111111111111111111" }
+      ],
+      "args": []
+    },
+    {
+      "name": "add_measurement",
+      "discriminator": [47, 120, 129, 100, 90, 124, 99, 56],
+      "accounts": [
+        {
+          "name": "registry",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              { "kind": "const", "value": [109, 101, 97, 115, 117, 114, 101, 109, 101, 110, 116, 95, 114, 101, 103, 105, 115, 116, 114, 121] }
+            ]
+          }
+        },
+        { "name": "governor", "writable": true, "signer": true }
+      ],
+      "args": [
+        { "name": "pcr_hash", "type": { "array": ["u8", 32] } },
+        { "name": "label", "type": { "array": ["u8", 32] } }
+      ]
+    },
+    {
+      "name": "revoke_measurement",
+      "discriminator": [229, 203, 215, 114, 74, 160, 21, 201],
+      "accounts": [
+        {
+          "name": "registry",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              { "kind": "const", "value": [109, 101, 97, 115, 117, 114, 101, 109, 101, 110, 116, 95, 114, 101, 103, 105, 115, 116, 114, 121] }
+            ]
+          }
+        },
+        { "name": "governor", "writable": true, "signer": true }
+      ],
+      "args": [
+        { "name": "pcr_hash", "type": { "array": ["u8", 32] } }
+      ]
+    },
+    {
+      "name": "transfer_governor",
+      "discriminator": [62, 205, 242, 213, 33, 255, 156, 151],
+      "accounts": [
+        {
+          "name": "registry",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              { "kind": "const", "value": [109, 101, 97, 115, 117, 114, 101, 109, 101, 110, 116, 95, 114, 101, 103, 105, 115, 116, 114, 121] }
+            ]
+          }
+        },
+        { "name": "governor", "writable": true, "signer": true }
+      ],
+      "args": [
+        { "name": "new_governor", "type": "pubkey" }
+      ]
+    },
+    {
+      "name": "register_enclave_v2",
+      "discriminator": [211, 230, 18, 143, 143, 216, 248, 237],
+      "accounts": [
+        {
+          "name": "solora_wallet",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              { "kind": "const", "value": [115, 111, 108, 111, 114, 97] },
+              { "kind": "account", "path": "solora_wallet.authority", "account": "SoloraWallet" }
+            ]
+          }
+        },
+        {
+          "name": "registry",
+          "pda": {
+            "seeds": [
+              { "kind": "const", "value": [109, 101, 97, 115, 117, 114, 101, 109, 101, 110, 116, 95, 114, 101, 103, 105, 115, 116, 114, 121] }
+            ]
+          }
+        },
+        {
+          "name": "instructions_sysvar",
+          "address": "Sysvar1nstructions1111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "add_allowed_program",
+      "discriminator": [81, 202, 134, 129, 247, 211, 122, 99],
+      "accounts": [
+        {
+          "name": "solora_wallet",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              { "kind": "const", "value": [115, 111, 108, 111, 114, 97] },
+              { "kind": "account", "path": "authority" }
+            ]
+          }
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true,
+          "relations": ["solora_wallet"]
+        }
+      ],
+      "args": [{ "name": "target_program", "type": "pubkey" }]
+    },
+    {
+      "name": "execute_arbitrary_cpi",
+      "discriminator": [241, 125, 226, 7, 93, 89, 71, 22],
+      "accounts": [
+        {
+          "name": "solora_wallet",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              { "kind": "const", "value": [115, 111, 108, 111, 114, 97] },
+              { "kind": "account", "path": "solora_wallet.authority", "account": "SoloraWallet" }
+            ]
+          }
+        },
+        { "name": "payer", "writable": true, "signer": true },
+        {
+          "name": "instructions_sysvar",
+          "address": "Sysvar1nstructions1111111111111111111111111"
+        },
+        {
+          "name": "slot_hashes_sysvar",
+          "address": "SysvarS1otHashes111111111111111111111111111"
+        }
+      ],
+      "args": [
+        { "name": "target_program", "type": "pubkey" },
+        { "name": "instruction_data", "type": "bytes" }
+      ]
+    },
+    {
+      "name": "execute_escape",
+      "discriminator": [9, 222, 75, 153, 110, 95, 138, 92],
+      "accounts": [
+        {
+          "name": "solora_wallet",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              { "kind": "const", "value": [115, 111, 108, 111, 114, 97] },
+              { "kind": "account", "path": "authority" }
+            ]
+          },
+          "relations": ["authority"]
+        },
+        { "name": "authority", "writable": true, "signer": true },
+        { "name": "system_program", "address": "11111111111111111111111111111111" }
+      ],
+      "args": []
+    },
+    {
+      "name": "execute_transfer",
+      "discriminator": [233, 126, 160, 184, 235, 206, 31, 119],
+      "accounts": [
+        {
+          "name": "solora_wallet",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              { "kind": "const", "value": [115, 111, 108, 111, 114, 97] },
+              { "kind": "account", "path": "solora_wallet.authority", "account": "SoloraWallet" }
+            ]
+          }
+        },
+        { "name": "payer", "writable": true, "signer": true },
+        {
+          "name": "destination",
+          "docs": ["Lamport sink. Bound into the signed intent's payload hash."],
+          "writable": true
+        },
+        {
+          "name": "instructions_sysvar",
+          "address": "Sysvar1nstructions1111111111111111111111111"
+        },
+        {
+          "name": "slot_hashes_sysvar",
+          "address": "SysvarS1otHashes111111111111111111111111111"
+        }
+      ],
+      "args": [{ "name": "amount", "type": "u64" }]
+    },
+    {
+      "name": "initialize_wallet",
+      "discriminator": [213, 0, 239, 240, 73, 100, 188, 193],
+      "accounts": [
+        {
+          "name": "solora_wallet",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              { "kind": "const", "value": [115, 111, 108, 111, 114, 97] },
+              { "kind": "account", "path": "authority" }
+            ]
+          }
+        },
+        { "name": "authority", "writable": true, "signer": true },
+        { "name": "system_program", "address": "11111111111111111111111111111111" }
+      ],
+      "args": [
+        { "name": "max_trade_size_usdc", "type": "u64" },
+        { "name": "max_slippage_bps", "type": "u16" },
+        { "name": "dev_enclave_pubkey", "type": "pubkey" }
+      ]
+    },
+    {
+      "name": "initiate_timelock",
+      "discriminator": [110, 151, 159, 57, 168, 108, 145, 51],
+      "accounts": [
+        {
+          "name": "solora_wallet",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              { "kind": "const", "value": [115, 111, 108, 111, 114, 97] },
+              { "kind": "account", "path": "authority" }
+            ]
+          },
+          "relations": ["authority"]
+        },
+        { "name": "authority", "writable": true, "signer": true },
+        { "name": "system_program", "address": "11111111111111111111111111111111" }
+      ],
+      "args": []
+    },
+    {
+      "name": "register_enclave",
+      "discriminator": [212, 174, 251, 235, 52, 145, 141, 168],
+      "accounts": [
+        {
+          "name": "solora_wallet",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              { "kind": "const", "value": [115, 111, 108, 111, 114, 97] },
+              { "kind": "account", "path": "authority" }
+            ]
+          },
+          "relations": ["authority"]
+        },
+        { "name": "authority", "writable": true, "signer": true }
+      ],
+      "args": [{ "name": "verified_enclave_pubkey", "type": "pubkey" }]
+    },
+    {
+      "name": "remove_allowed_program",
+      "discriminator": [145, 253, 69, 41, 255, 69, 248, 163],
+      "accounts": [
+        {
+          "name": "solora_wallet",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              { "kind": "const", "value": [115, 111, 108, 111, 114, 97] },
+              { "kind": "account", "path": "authority" }
+            ]
+          }
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true,
+          "relations": ["solora_wallet"]
+        }
+      ],
+      "args": [{ "name": "target_program", "type": "pubkey" }]
+    },
+    {
+      "name": "toggle_pause",
+      "discriminator": [238, 237, 206, 27, 255, 95, 123, 229],
+      "accounts": [
+        {
+          "name": "solora_wallet",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              { "kind": "const", "value": [115, 111, 108, 111, 114, 97] },
+              { "kind": "account", "path": "authority" }
+            ]
+          }
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true,
+          "relations": ["solora_wallet"]
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "update_policy",
+      "discriminator": [212, 245, 246, 7, 163, 151, 18, 57],
+      "accounts": [
+        {
+          "name": "solora_wallet",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              { "kind": "const", "value": [115, 111, 108, 111, 114, 97] },
+              { "kind": "account", "path": "authority" }
+            ]
+          }
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true,
+          "relations": ["solora_wallet"]
+        }
+      ],
+      "args": [
+        { "name": "new_max_trade_size", "type": "u64" },
+        { "name": "new_max_slippage", "type": "u16" }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "SoloraWallet",
+      "discriminator": [170, 18, 86, 95, 106, 12, 175, 27]
+    }
+  ],
+  "errors": [
+    { "code": 6000, "name": "WalletPaused", "msg": "The wallet is currently paused by the user." },
+    { "code": 6001, "name": "UnauthorizedEnclave", "msg": "Transaction signed by an unauthorized enclave." },
+    { "code": 6002, "name": "UnauthorizedUser", "msg": "Only the wallet authority can perform this action." },
+    { "code": 6003, "name": "SelfRoutingDetected", "msg": "Self-routing CPI into the Solora program is not allowed." },
+    { "code": 6004, "name": "NoTimelock", "msg": "No active timelock is set." },
+    { "code": 6005, "name": "TimelockActive", "msg": "Escape timelock is still active." },
+    { "code": 6006, "name": "InvalidIxSysvar", "msg": "Instructions sysvar account is not the canonical sysvar." },
+    { "code": 6007, "name": "MissingEdwardsIx", "msg": "Expected the Ed25519Program verification instruction at index 0." },
+    { "code": 6008, "name": "WrongIxAtIndex0", "msg": "Index 0 is not the Ed25519Program." },
+    { "code": 6009, "name": "WrongExecuteIxIndex", "msg": "Execute instruction must be immediately preceded by an Ed25519 verify ix." },
+    { "code": 6010, "name": "EdwardsIxMalformed", "msg": "Ed25519Program instruction is malformed." },
+    { "code": 6011, "name": "EdwardsIxCountUnsupported", "msg": "Ed25519Program instruction has unsupported signature count." },
+    { "code": 6012, "name": "EdwardsIxOffChainData", "msg": "Ed25519Program instruction references off-instruction data; only inline data is supported." },
+    { "code": 6013, "name": "EnclaveSignerMismatch", "msg": "Ed25519 signature pubkey does not match wallet.enclave_signer." },
+    { "code": 6014, "name": "IntentMsgWrongSize", "msg": "Signed intent message has the wrong length." },
+    { "code": 6015, "name": "IntentDomainMismatch", "msg": "Signed intent message has the wrong domain prefix." },
+    { "code": 6016, "name": "IntentProgramMismatch", "msg": "Signed intent message is bound to a different program id." },
+    { "code": 6017, "name": "IntentWalletMismatch", "msg": "Signed intent message is bound to a different wallet PDA." },
+    { "code": 6018, "name": "IntentNonceMismatch", "msg": "Signed intent nonce does not match the on-chain wallet nonce." },
+    { "code": 6019, "name": "IntentExpired", "msg": "Signed intent has expired (current slot is past expiry)." },
+    { "code": 6020, "name": "IntentKindMismatch", "msg": "Signed intent kind does not match the executing instruction." },
+    { "code": 6021, "name": "IntentPayloadMismatch", "msg": "Signed intent payload hash does not match the executing instruction's arguments." },
+    { "code": 6022, "name": "NonceOverflow", "msg": "Wallet nonce overflow." },
+    { "code": 6023, "name": "InsufficientWalletBalance", "msg": "Insufficient wallet balance after transfer would break rent exemption." },
+    { "code": 6024, "name": "TargetProgramNotAllowed", "msg": "Target program is not in the wallet's CPI allowlist." },
+    { "code": 6025, "name": "AllowlistFull", "msg": "Allowlist is at capacity; remove a program before adding another." },
+    { "code": 6026, "name": "DuplicateAllowedProgram", "msg": "Program is already in the allowlist." },
+    { "code": 6027, "name": "AllowedProgramNotFound", "msg": "Program is not currently in the allowlist." },
+    { "code": 6028, "name": "TooManyCpiAccounts", "msg": "CPI exceeds the remaining_accounts cap." },
+    { "code": 6029, "name": "CpiInstructionDataTooLarge", "msg": "CPI instruction data exceeds size limit." },
+    { "code": 6030, "name": "InvalidSlotHashesSysvar", "msg": "SlotHashes sysvar account is not the canonical sysvar." },
+    { "code": 6031, "name": "SlotHashesAccountInvalid", "msg": "SlotHashes sysvar data is malformed." },
+    { "code": 6032, "name": "BlockhashSlotNotFound", "msg": "Signed blockhash slot is outside the SlotHashes retention window." },
+    { "code": 6033, "name": "BlockhashMismatch", "msg": "Signed blockhash does not match the on-chain SlotHashes entry for that slot." },
+    { "code": 6034, "name": "MeasurementRegistryFull", "msg": "Measurement registry is at capacity; revoke before adding another." },
+    { "code": 6035, "name": "DuplicateMeasurement", "msg": "Measurement is already in the registry." },
+    { "code": 6036, "name": "MeasurementNotFound", "msg": "Measurement not found in the registry." },
+    { "code": 6037, "name": "MeasurementRevoked", "msg": "Measurement is revoked and cannot be used for attestation." },
+    { "code": 6038, "name": "UnauthorizedGovernor", "msg": "Caller is not the registry governor." },
+    { "code": 6039, "name": "AttestationMsgWrongSize", "msg": "Attestation message has the wrong length." },
+    { "code": 6040, "name": "AttestationDomainMismatch", "msg": "Attestation message has the wrong domain prefix." },
+    { "code": 6041, "name": "AttestationProgramMismatch", "msg": "Attestation message is bound to a different program id." },
+    { "code": 6042, "name": "AttestationWalletMismatch", "msg": "Attestation message is bound to a different wallet PDA." },
+    { "code": 6043, "name": "AttestationNonceMismatch", "msg": "Attestation message is bound to a different wallet nonce." },
+    { "code": 6044, "name": "AttestationExpired", "msg": "Attestation has expired (current slot is past expiry)." },
+    { "code": 6045, "name": "AttestationMeasurementMismatch", "msg": "Attestation message references a measurement not present in the registry." },
+    { "code": 6046, "name": "AttestationGovernorMismatch", "msg": "Attestation governor signature does not match registry.governor." }
+  ],
+  "types": [
+    {
+      "name": "Policy",
+      "serialization": "bytemuck",
+      "repr": { "kind": "c" },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          { "name": "max_trade_size_usdc", "type": "u64" },
+          { "name": "allowed_programs", "type": { "array": ["pubkey", 16] } },
+          { "name": "max_slippage_bps", "type": "u16" },
+          { "name": "allowed_count", "type": "u8" },
+          { "name": "_padding", "type": { "array": ["u8", 5] } }
+        ]
+      }
+    },
+    {
+      "name": "SoloraWallet",
+      "serialization": "bytemuck",
+      "repr": { "kind": "c" },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          { "name": "authority", "type": "pubkey" },
+          { "name": "enclave_signer", "type": "pubkey" },
+          { "name": "policy", "type": { "defined": { "name": "Policy" } } },
+          { "name": "nonce", "type": "u64" },
+          { "name": "unlock_timestamp", "type": "i64" },
+          { "name": "is_active", "type": "u8" },
+          { "name": "_padding", "type": { "array": ["u8", 7] } }
+        ]
+      }
+    },
+    {
+      "name": "MeasurementEntry",
+      "serialization": "bytemuck",
+      "repr": { "kind": "c" },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          { "name": "pcr_hash", "type": { "array": ["u8", 32] } },
+          { "name": "label", "type": { "array": ["u8", 32] } },
+          { "name": "status", "type": "u8" },
+          { "name": "_padding", "type": { "array": ["u8", 7] } },
+          { "name": "added_slot", "type": "u64" }
+        ]
+      }
+    },
+    {
+      "name": "MeasurementRegistry",
+      "serialization": "bytemuck",
+      "repr": { "kind": "c" },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          { "name": "governor", "type": "pubkey" },
+          {
+            "name": "measurements",
+            "type": { "array": [{ "defined": { "name": "MeasurementEntry" } }, 8] }
+          },
+          { "name": "count", "type": "u8" },
+          { "name": "_padding", "type": { "array": ["u8", 7] } }
+        ]
+      }
+    }
+  ]
+}

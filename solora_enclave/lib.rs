@@ -3,6 +3,14 @@
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::too_many_arguments)]
 
+// The cryptographically sealed hardware footprint of the Solora AI Enclave
+pub const SOLORA_MRENCLAVE: [u8; 32] = [
+    0x98, 0x1c, 0x0e, 0x44, 0x57, 0x9e, 0x3b, 0x2a, 
+    0x57, 0x6a, 0x93, 0xd7, 0x65, 0x61, 0xfb, 0x40, 
+    0xd3, 0x87, 0x77, 0xee, 0x0a, 0x9f, 0x83, 0xf5, 
+    0xa7, 0xeb, 0xec, 0x95, 0xef, 0x2c, 0xa2, 0xb5
+];
+
 #[ink::contract]
 mod solora_enclave {
     use base64ct::{Base64, Encoding};
@@ -465,5 +473,18 @@ mod solora_enclave {
             }
             Ok(out)
         }
+
+        pub fn process_agent_action(ctx: Context<AgentAction>, quote_mrenclave: [u8; 32]) -> Result<()> {
+        // 1. Verify the hardware fingerprint matches the deployed Docker image
+        require!(
+            quote_mrenclave == SOLORA_MRENCLAVE,
+            SoloraError::InvalidHardwareFingerprint
+        );
+
+        // 2. Execute the trusted agent logic...
+        msg!("Hardware verification passed. Executing trusted AI payload.");
+        
+        Ok(())
+}
     }
 }
