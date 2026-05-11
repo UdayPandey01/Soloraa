@@ -51,18 +51,18 @@ export default function PortfolioPage() {
     const sinceStartBps = start > 0 ? Math.round(((end - start) / start) * 10_000) : 0;
 
     return (
-        <div className="mx-auto max-w-7xl px-6 pt-16 pb-24 lg:pt-20">
-            <header className="flex flex-wrap items-end justify-between gap-6 border-b border-line pb-10">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 pt-12 sm:pt-16 pb-20 sm:pb-24 lg:pt-20">
+            <header className="flex flex-wrap items-end justify-between gap-6 border-b border-line pb-8 sm:pb-10">
                 <div>
                     <Badge>Portfolio</Badge>
-                    <h1 className="mt-5 text-display-2 text-fg">
+                    <h1 className="mt-4 sm:mt-5 text-display-2 text-fg">
                         Wallet 3Kh6…KR6N
                     </h1>
-                    <p className="mt-3 text-[14px] text-fg-muted font-mono">
+                    <p className="mt-2 sm:mt-3 text-[13px] sm:text-[14px] text-fg-muted font-mono">
                         bound to 4 attested agents · governor 7Zk2…fibJ
                     </p>
                 </div>
-                <div className="grid grid-cols-3 gap-px overflow-hidden rounded-xl border border-line bg-line">
+                <div className="grid grid-cols-3 gap-px overflow-hidden rounded-xl border border-line bg-line w-full sm:w-auto">
                     <Kpi label="Net asset value" value={`${formatUsdc(end)} USDC`} />
                     <Kpi
                         label="Period PnL"
@@ -73,7 +73,7 @@ export default function PortfolioPage() {
                 </div>
             </header>
 
-            <section className="mt-12 grid gap-6 lg:grid-cols-[1.6fr_1fr]">
+            <section className="mt-10 sm:mt-12 grid gap-5 sm:gap-6 lg:grid-cols-[1.6fr_1fr]">
                 <Card>
                     <CardBody>
                         <header className="flex items-baseline justify-between">
@@ -128,7 +128,7 @@ export default function PortfolioPage() {
                 </Card>
             </section>
 
-            <section className="mt-12">
+            <section className="mt-10 sm:mt-12">
                 <header className="mb-5 flex items-baseline justify-between">
                     <h2 className="text-display-3 text-fg">Open positions</h2>
                     <Link
@@ -138,8 +138,8 @@ export default function PortfolioPage() {
                         Add an agent <ArrowUpRight className="size-3.5" />
                     </Link>
                 </header>
-                <div className="overflow-hidden rounded-xl border border-line">
-                    <table className="w-full text-[13px]">
+                <div className="overflow-x-auto rounded-xl border border-line">
+                    <table className="w-full text-[13px] min-w-[640px]">
                         <thead className="bg-bg-surface/50 border-b border-line">
                             <tr className="text-left text-fg-dim font-mono text-[11px] uppercase tracking-wider">
                                 <th className="px-4 py-3 font-medium">Agent</th>
@@ -194,12 +194,12 @@ export default function PortfolioPage() {
                 </div>
             </section>
 
-            <section className="mt-12">
+            <section className="mt-10 sm:mt-12">
                 <header className="mb-5">
                     <h2 className="text-display-3 text-fg flex items-center gap-2">
                         <Activity className="size-5 text-fg-muted" /> Recent execution
                     </h2>
-                    <p className="mt-2 text-[14px] text-fg-muted max-w-2xl">
+                    <p className="mt-2 text-[13.5px] sm:text-[14px] text-fg-muted max-w-2xl">
                         Every line is an attested intent — successful or rejected. Replay
                         attempts surface here with the on-chain error code.
                     </p>
@@ -211,9 +211,9 @@ export default function PortfolioPage() {
                         return (
                             <li
                                 key={`${r.ts}-${i}`}
-                                className="flex items-center justify-between px-4 py-3.5"
+                                className="flex flex-wrap items-center justify-between gap-2 px-4 py-3.5"
                             >
-                                <div className="flex items-center gap-3 min-w-0">
+                                <div className="flex flex-wrap items-center gap-2 sm:gap-3 min-w-0">
                                     <span
                                         className={`mono-num text-[11.5px] ${
                                             r.status === "ok" ? "text-fg-dim" : "text-danger"

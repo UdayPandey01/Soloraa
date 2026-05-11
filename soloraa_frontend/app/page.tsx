@@ -20,20 +20,21 @@ export default function HomePage() {
 
 function FinalCta() {
     return (
-        <section className="relative py-28 lg:py-36 border-t border-line">
-            <div className="mx-auto max-w-7xl px-6">
-                <div className="rounded-xl border border-line bg-bg-surface/40 p-10 lg:p-14">
+        <section className="relative py-20 sm:py-28 lg:py-36 border-t border-line">
+            <div className="mx-auto max-w-7xl px-4 sm:px-6">
+                <div className="rounded-xl border border-line bg-bg-surface/40 p-7 sm:p-10 lg:p-14">
                     <div className="max-w-3xl">
                         <Badge>Get started</Badge>
-                        <h2 className="mt-5 text-display-2 text-balance text-fg">
+                        <h2 className="mt-4 sm:mt-5 text-display-2 text-balance text-fg">
                             Run an attested agent in two clicks.
                         </h2>
-                        <p className="mt-5 text-[17px] leading-[1.55] text-fg-muted">
+                        <p className="mt-4 sm:mt-5 text-[15px] sm:text-[17px] leading-[1.55] text-fg-muted">
                             Connect a wallet, delegate a bounded amount, and step through
-                            the cryptographic execution lifecycle in real time. The vault
-                            is revocable, and the replay demo remains one click away.
+                            the cryptographic execution lifecycle in real time. Real
+                            devnet legs broadcast after the pipeline, and the replay
+                            demo is one click away.
                         </p>
-                        <div className="mt-8 flex flex-wrap items-center gap-3">
+                        <div className="mt-7 sm:mt-8 flex flex-wrap items-center gap-3">
                             <Link
                                 href="/agents"
                                 className="inline-flex items-center gap-2 rounded-md h-11 px-5 text-[14px] font-medium bg-fg text-bg hover:opacity-90"

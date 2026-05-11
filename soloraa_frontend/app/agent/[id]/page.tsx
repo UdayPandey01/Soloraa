@@ -45,7 +45,7 @@ export default async function AgentDetailPage({ params }: PageProps) {
     const cfg = agent.config;
 
     return (
-        <div className="mx-auto max-w-7xl px-6 pt-12 pb-24 lg:pt-16">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 pt-10 pb-20 sm:pt-12 sm:pb-24 lg:pt-16">
             <Link
                 href="/agents"
                 className="inline-flex items-center gap-1.5 text-[12.5px] text-fg-muted hover:text-fg transition-colors"
@@ -54,13 +54,13 @@ export default async function AgentDetailPage({ params }: PageProps) {
             </Link>
 
             {/* Header */}
-            <header className="mt-8 grid gap-8 lg:grid-cols-[1.6fr_1fr] lg:items-end border-b border-line pb-12">
+            <header className="mt-6 sm:mt-8 grid gap-6 sm:gap-8 lg:grid-cols-[1.6fr_1fr] lg:items-end border-b border-line pb-10 sm:pb-12">
                 <div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                         <h1 className="text-display-2 text-fg">{agent.name}</h1>
                         <Badge tone={statusTone[agent.status]}>{agent.status}</Badge>
                     </div>
-                    <p className="mt-4 max-w-2xl text-[17px] leading-[1.55] text-fg-muted">
+                    <p className="mt-3 sm:mt-4 max-w-2xl text-[15px] sm:text-[17px] leading-[1.55] text-fg-muted">
                         {agent.tagline}
                     </p>
                 </div>
@@ -75,7 +75,7 @@ export default async function AgentDetailPage({ params }: PageProps) {
             </header>
 
             {/* Thesis + protocols */}
-            <section className="mt-12 grid gap-6 lg:grid-cols-[1.6fr_1fr]">
+            <section className="mt-10 sm:mt-12 grid gap-5 sm:gap-6 lg:grid-cols-[1.6fr_1fr]">
                 <Card>
                     <CardBody className="space-y-4">
                         <h2 className="text-eyebrow text-fg-dim">Thesis</h2>
@@ -120,8 +120,8 @@ export default async function AgentDetailPage({ params }: PageProps) {
             </section>
 
             {/* Config */}
-            <section className="mt-12">
-                <header className="flex items-baseline justify-between">
+            <section className="mt-10 sm:mt-12">
+                <header className="flex items-baseline justify-between gap-4">
                     <div>
                         <h2 className="text-display-3 text-fg">Default policy</h2>
                         <p className="mt-2 text-[14px] text-fg-muted max-w-2xl">
@@ -129,11 +129,11 @@ export default async function AgentDetailPage({ params }: PageProps) {
                             refuse to sign anything outside them.
                         </p>
                     </div>
-                    <code className="font-mono text-[11px] text-fg-dim hidden md:block">
+                    <code className="font-mono text-[11px] text-fg-dim hidden lg:block">
                         programs/solora/src/state.rs · Policy
                     </code>
                 </header>
-                <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="mt-6 grid gap-3 grid-cols-2 lg:grid-cols-4">
                     <PolicyField
                         label="Capital allocation"
                         value={`${formatUsdc(cfg.capitalUsdcMin)} – ${formatUsdc(cfg.capitalUsdcMax)} USDC`}
@@ -167,15 +167,17 @@ export default async function AgentDetailPage({ params }: PageProps) {
             </section>
 
             {/* Run + live execution */}
-            <section className="mt-12">
+            <section className="mt-10 sm:mt-12">
                 <h2 className="text-display-3 text-fg">Live execution</h2>
-                <p className="mt-2 text-[14px] text-fg-muted max-w-2xl">
+                <p className="mt-2 text-[13.5px] sm:text-[14px] text-fg-muted max-w-2xl">
                     Press <span className="text-fg">Run agent</span> to open the
                     delegation vault, approve a bounded amount, and step through the
-                    full execution lifecycle. After confirmation, press{" "}
-                    <span className="text-fg">Simulate replay attack</span> — the same
-                    signed bytes will be rebroadcast and rejected on-chain with{" "}
-                    <code className="font-mono text-fg-soft">IntentNonceMismatch (6018)</code>.
+                    cryptographic execution pipeline. Once confirmed, three real
+                    on-chain legs broadcast to Solana devnet — each one a fresh tx
+                    signature you can open in Explorer. Then press{" "}
+                    <span className="text-fg">Simulate replay attack</span> to watch
+                    the verifier refuse a re-broadcast with{" "}
+                    <code className="font-mono text-fg-soft">IntentNonceMismatch · 6018</code>.
                 </p>
                 <div className="mt-6">
                     <AgentRunner agent={agent} />

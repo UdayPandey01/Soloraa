@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { motion } from "framer-motion";
+import { useEffect, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { Menu, X } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { WalletButton } from "@/components/wallet-button";
 
@@ -16,6 +18,20 @@ const NAV_LINKS = [
 
 export function Nav() {
     const pathname = usePathname();
+    const [mobileOpen, setMobileOpen] = useState(false);
+
+    useEffect(() => {
+        setMobileOpen(false);
+    }, [pathname]);
+
+    useEffect(() => {
+        if (!mobileOpen) return;
+        const prev = document.body.style.overflow;
+        document.body.style.overflow = "hidden";
+        return () => {
+            document.body.style.overflow = prev;
+        };
+    }, [mobileOpen]);
 
     return (
         <motion.header
@@ -24,7 +40,7 @@ export function Nav() {
             transition={{ duration: 0.5, ease: [0.21, 1.02, 0.73, 1] }}
             className="sticky top-0 z-50 border-b border-line/50 bg-bg/80 backdrop-blur-xl"
         >
-            <div className="mx-auto max-w-7xl px-6 py-3 flex items-center justify-between">
+            <div className="mx-auto max-w-7xl px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
                 <Link href="/" className="flex items-center gap-2.5 group">
                     <Logo />
                     <span className="text-sm font-medium tracking-tight">Soloraa</span>
@@ -35,7 +51,8 @@ export function Nav() {
 
                 <nav className="hidden md:flex items-center gap-1">
                     {NAV_LINKS.map((link) => {
-                        const active = pathname === link.href || pathname.startsWith(`${link.href}/`);
+                        const active =
+                            pathname === link.href || pathname.startsWith(`${link.href}/`);
                         return (
                             <Link
                                 key={link.href}
@@ -60,8 +77,50 @@ export function Nav() {
 
                 <div className="flex items-center gap-2">
                     <WalletButton />
+                    <button
+                        type="button"
+                        onClick={() => setMobileOpen((v) => !v)}
+                        className="md:hidden grid size-9 place-items-center rounded-full border border-line-bright bg-bg-surface text-fg-soft hover:text-fg"
+                        aria-label={mobileOpen ? "Close menu" : "Open menu"}
+                    >
+                        {mobileOpen ? <X className="size-4" /> : <Menu className="size-4" />}
+                    </button>
                 </div>
             </div>
+
+            <AnimatePresence>
+                {mobileOpen && (
+                    <motion.div
+                        initial={{ opacity: 0, y: -6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -6 }}
+                        transition={{ duration: 0.18 }}
+                        className="md:hidden border-t border-line/60 bg-bg/95 backdrop-blur-xl"
+                    >
+                        <nav className="mx-auto max-w-7xl px-4 py-3 grid gap-1">
+                            {NAV_LINKS.map((link) => {
+                                const active =
+                                    pathname === link.href ||
+                                    pathname.startsWith(`${link.href}/`);
+                                return (
+                                    <Link
+                                        key={link.href}
+                                        href={link.href}
+                                        className={cn(
+                                            "rounded-lg px-3 py-2.5 text-[14px]",
+                                            active
+                                                ? "bg-bg-raised text-fg"
+                                                : "text-fg-soft hover:bg-bg-surface hover:text-fg"
+                                        )}
+                                    >
+                                        {link.label}
+                                    </Link>
+                                );
+                            })}
+                        </nav>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </motion.header>
     );
 }

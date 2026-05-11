@@ -17,7 +17,7 @@ export function Hero() {
         <section className="relative isolate">
             <div className="absolute inset-x-0 top-0 h-[500px] grid-overlay pointer-events-none opacity-60" aria-hidden="true" />
 
-            <div className="relative mx-auto max-w-7xl px-6 pt-24 pb-20 lg:pt-32 lg:pb-28">
+            <div className="relative mx-auto max-w-7xl px-4 sm:px-6 pt-20 pb-16 sm:pt-24 sm:pb-20 lg:pt-32 lg:pb-28">
                 <motion.div
                     variants={stagger(0.06)}
                     initial="hidden"
@@ -32,7 +32,7 @@ export function Hero() {
 
                     <motion.h1
                         variants={fadeUp}
-                        className="mt-7 text-display-1 text-balance text-fg"
+                        className="mt-6 sm:mt-7 text-display-1 text-balance text-fg"
                     >
                         The cryptographic execution layer for{" "}
                         <span className="text-fg-soft">autonomous AI</span> on Solana.
@@ -40,7 +40,7 @@ export function Hero() {
 
                     <motion.p
                         variants={fadeUp}
-                        className="mt-7 max-w-2xl text-lg leading-[1.55] text-fg-muted"
+                        className="mt-6 sm:mt-7 max-w-2xl text-[16px] sm:text-lg leading-[1.55] text-fg-muted"
                     >
                         Soloraa lets an AI agent hold and move funds under cryptographic
                         boundaries the user controls. Funds live in a program-derived
@@ -50,7 +50,7 @@ export function Hero() {
 
                     <motion.div
                         variants={fadeUp}
-                        className="mt-10 flex flex-wrap items-center gap-3"
+                        className="mt-8 sm:mt-10 flex flex-wrap items-center gap-3"
                     >
                         <Link href="/agents" className={PRIMARY_CTA}>
                             Browse agents <ArrowRight className="size-4" />
@@ -62,7 +62,7 @@ export function Hero() {
 
                     <motion.div
                         variants={fadeUp}
-                        className="mt-9 flex flex-wrap items-center gap-x-5 gap-y-2 text-[12.5px] text-fg-dim"
+                        className="mt-8 sm:mt-9 flex flex-wrap items-center gap-x-5 gap-y-2 text-[12.5px] text-fg-dim"
                     >
                         <CertLine label="Ed25519" detail="precompile-verified on-chain" />
                         <CertLine label="Wormhole + Pyth" detail="real guardian quorum" />
@@ -74,9 +74,9 @@ export function Hero() {
                     initial={{ opacity: 0, y: 12 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ ...SPRING_GENTLE, delay: 0.3 }}
-                    className="mt-20 lg:mt-24"
+                    className="mt-16 sm:mt-20 lg:mt-24"
                 >
-                    <div className="rounded-xl border border-line bg-bg-surface/60 p-6 lg:p-7">
+                    <div className="rounded-xl border border-line bg-bg-surface/60 p-5 sm:p-6 lg:p-7">
                         <div className="flex flex-wrap items-baseline justify-between gap-3 mb-5">
                             <div>
                                 <p className="text-eyebrow text-fg-dim">canonical signed intent</p>

@@ -49,7 +49,7 @@ export default function ReplayDemoPage() {
     }, []);
 
     return (
-        <div className="mx-auto max-w-7xl px-6 pt-16 pb-24 lg:pt-20">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 pt-12 sm:pt-16 pb-20 sm:pb-24 lg:pt-20">
             <header className="max-w-3xl">
                 <Badge tone="danger" dotted>
                     Threat demo
@@ -65,7 +65,7 @@ export default function ReplayDemoPage() {
                 </p>
             </header>
 
-            <section className="mt-12 grid gap-6 lg:grid-cols-[1fr_320px]">
+            <section className="mt-10 sm:mt-12 grid gap-5 sm:gap-6 lg:grid-cols-[1fr_320px]">
                 <Card>
                     <CardBody className="space-y-6">
                         <header className="flex items-baseline justify-between border-b border-line pb-4">
@@ -199,7 +199,7 @@ export default function ReplayDemoPage() {
                 </Card>
             </section>
 
-            <section className="mt-12">
+            <section className="mt-10 sm:mt-12">
                 <h2 className="text-display-3 text-fg">What the chain actually does</h2>
                 <p className="mt-3 text-[14px] text-fg-muted max-w-3xl">
                     The replay-rejection path doesn't depend on anything off-chain. The
@@ -237,7 +237,7 @@ replayTx.sign(authority);
                 </div>
             </section>
 
-            <section className="mt-12 rounded-xl border border-line bg-bg-surface/40 p-8">
+            <section className="mt-10 sm:mt-12 rounded-xl border border-line bg-bg-surface/40 p-6 sm:p-8">
                 <h3 className="text-[15px] font-medium text-fg">Why this matters</h3>
                 <p className="mt-3 text-[14px] leading-[1.6] text-fg-muted max-w-3xl">
                     Most "AI agent wallets" enforce policy at the SDK layer. A captured

@@ -48,8 +48,8 @@ export function Solution() {
     }, [prefersReduced]);
 
     return (
-        <section className="relative py-28 lg:py-36 border-t border-line">
-            <div className="mx-auto max-w-7xl px-6">
+        <section className="relative py-20 sm:py-28 lg:py-36 border-t border-line">
+            <div className="mx-auto max-w-7xl px-4 sm:px-6">
                 <motion.div
                     initial="hidden"
                     whileInView="visible"

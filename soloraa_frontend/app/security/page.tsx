@@ -53,7 +53,7 @@ const GUARANTEES = [
 export default function SecurityPage() {
     return (
         <div>
-            <section className="mx-auto max-w-7xl px-6 pt-16 pb-12 lg:pt-20">
+            <section className="mx-auto max-w-7xl px-4 sm:px-6 pt-12 sm:pt-16 pb-10 sm:pb-12 lg:pt-20">
                 <header className="max-w-3xl">
                     <Badge>Security</Badge>
                     <h1 className="mt-5 text-display-2 text-fg text-balance">
@@ -68,7 +68,7 @@ export default function SecurityPage() {
                 </header>
             </section>
 
-            <section className="mx-auto max-w-7xl px-6">
+            <section className="mx-auto max-w-7xl px-4 sm:px-6">
                 <div className="rounded-xl border border-line bg-bg-surface/40 p-6 lg:p-8">
                     <p className="text-eyebrow text-fg-dim">Canonical signed intent</p>
                     <p className="mt-2 text-[15px] text-fg-soft max-w-2xl">
@@ -81,7 +81,7 @@ export default function SecurityPage() {
                 </div>
             </section>
 
-            <section className="mx-auto max-w-7xl px-6 pt-20">
+            <section className="mx-auto max-w-7xl px-4 sm:px-6 pt-20">
                 <h2 className="text-display-3 text-fg">Active checks</h2>
                 <div className="mt-8 grid gap-3 sm:grid-cols-2">
                     {GUARANTEES.map((g) => (
@@ -114,7 +114,7 @@ export default function SecurityPage() {
 
             <Solution />
 
-            <section className="mx-auto max-w-7xl px-6 py-20">
+            <section className="mx-auto max-w-7xl px-4 sm:px-6 py-20">
                 <div className="grid gap-8 lg:grid-cols-[1fr_1.4fr] items-start">
                     <div>
                         <h2 className="text-display-3 text-fg">Trust model in one paragraph</h2>

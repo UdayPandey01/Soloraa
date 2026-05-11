@@ -3,9 +3,9 @@ import { CLUSTER, PROGRAM_ID } from "@/lib/solora";
 
 export function Footer() {
     return (
-        <footer className="mt-32 border-t border-line/60">
-            <div className="mx-auto max-w-7xl px-6 py-10">
-                <div className="grid gap-10 md:grid-cols-[1.4fr_1fr_1fr_1fr]">
+        <footer className="mt-24 sm:mt-32 border-t border-line/60">
+            <div className="mx-auto max-w-7xl px-4 sm:px-6 py-10">
+                <div className="grid gap-8 sm:grid-cols-2 md:grid-cols-[1.4fr_1fr_1fr_1fr]">
                     <div>
                         <p className="text-sm text-fg leading-relaxed max-w-sm">
                             Soloraa is the cryptographic execution layer for autonomous

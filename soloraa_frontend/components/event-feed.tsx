@@ -54,7 +54,7 @@ export function EventFeed({ events, newestFirst = true }: EventFeedProps) {
                             <div className="flex items-center gap-2.5 min-w-0">
                                 <span
                                     className={cn(
-                                        "inline-flex size-5 items-center justify-center rounded-full border",
+                                        "inline-flex size-5 shrink-0 items-center justify-center rounded-full border",
                                         event.rejected
                                             ? "border-danger/50 text-danger"
                                             : "border-ok/50 text-ok"
@@ -66,12 +66,12 @@ export function EventFeed({ events, newestFirst = true }: EventFeedProps) {
                                         <Check className="size-3" strokeWidth={2.5} />
                                     )}
                                 </span>
-                                <p className="text-[13.5px] font-medium text-fg truncate">
+                                <p className="text-[13px] sm:text-[13.5px] font-medium text-fg truncate">
                                     {event.title}
                                 </p>
                             </div>
                             <div className="flex items-center gap-2 text-fg-dim shrink-0">
-                                <span className="font-mono text-[10.5px] uppercase tracking-wider">
+                                <span className="hidden sm:inline-flex font-mono text-[10.5px] uppercase tracking-wider">
                                     {stageBadge[event.stage] ?? event.stage}
                                 </span>
                                 <span className="font-mono text-[11px] mono-num">
@@ -85,9 +85,19 @@ export function EventFeed({ events, newestFirst = true }: EventFeedProps) {
                             </p>
                         )}
                         {event.code && (
-                            <code className="mt-2 ml-[30px] block font-mono text-[11.5px] text-fg-soft break-all">
+                            <code className="mt-2 ml-[30px] block font-mono text-[11px] sm:text-[11.5px] text-fg-soft break-all">
                                 {event.code}
                             </code>
+                        )}
+                        {event.txSignature && event.explorerUrl && (
+                            <a
+                                href={event.explorerUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="mt-2 ml-[30px] inline-flex items-center gap-1.5 font-mono text-[11px] text-fg-soft hover:text-fg break-all"
+                            >
+                                {event.txSignature.slice(0, 10)}…{event.txSignature.slice(-10)} ↗
+                            </a>
                         )}
                     </motion.li>
                 ))}

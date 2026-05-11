@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 
 export default function DevelopersPage() {
     return (
-        <div className="mx-auto max-w-7xl px-6 pt-16 pb-24 lg:pt-20">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 pt-12 sm:pt-16 pb-20 sm:pb-24 lg:pt-20">
             <header className="max-w-3xl">
                 <Badge>Developer platform</Badge>
                 <h1 className="mt-5 text-display-2 text-fg text-balance">

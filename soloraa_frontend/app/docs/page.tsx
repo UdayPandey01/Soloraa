@@ -21,8 +21,8 @@ const TOC = [
 
 export default function DocsPage() {
     return (
-        <div className="mx-auto max-w-7xl px-6 pt-16 pb-24 lg:pt-20">
-            <div className="grid gap-12 lg:grid-cols-[200px_1fr]">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 pt-12 sm:pt-16 pb-20 sm:pb-24 lg:pt-20">
+            <div className="grid gap-10 sm:gap-12 lg:grid-cols-[200px_1fr]">
                 {/* Sidebar */}
                 <aside className="lg:sticky lg:top-20 lg:self-start">
                     <p className="text-eyebrow text-fg-dim mb-3">Reference</p>
