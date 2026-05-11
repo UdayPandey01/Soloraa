@@ -14,6 +14,7 @@ import {
     ExternalLink,
 } from "lucide-react";
 import { useExecution, type StageId } from "@/lib/execution-store";
+import { usePortfolio, type PortfolioReceipt } from "@/lib/portfolio-store";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody } from "@/components/ui/card";
@@ -62,6 +63,7 @@ export function AgentRunner({ agent }: AgentRunnerProps) {
             reset: s.reset,
         }))
     );
+    const addRunToPortfolio = usePortfolio((s) => s.addRun);
 
     const timeouts = useRef<ReturnType<typeof setTimeout>[]>([]);
     const cancelRef = useRef(false);
@@ -292,18 +294,51 @@ export function AgentRunner({ agent }: AgentRunnerProps) {
 
                 if (cancelRef.current) return;
                 const finalSig = sigs[sigs.length - 1]?.signature ?? approval.signature;
+                const cumulativeNotional = sigs.reduce(
+                    (acc, _, idx) => acc + agent.executionLegs[idx]!.notionalUsdc,
+                    0
+                );
                 appendEvent(
                     ev(
                         "verify",
                         "Run complete",
-                        `${sigs.length} live devnet legs confirmed. Cumulative notional ${formatUsdc(sigs.reduce((acc, _, idx) => acc + agent.executionLegs[idx]!.notionalUsdc, 0))} USDC.`,
+                        `${sigs.length} live devnet legs confirmed. Cumulative notional ${formatUsdc(cumulativeNotional)} USDC.`,
                         { txSignature: finalSig }
                     )
                 );
+
+                const portfolioReceipts: PortfolioReceipt[] = [
+                    {
+                        label: approval.label,
+                        signature: approval.signature,
+                        explorerUrl: approval.explorerUrl,
+                        notionalUsdc: 0,
+                        ts: Date.now(),
+                    },
+                    ...sigs.map((r, idx) => ({
+                        label: r.label,
+                        signature: r.signature,
+                        explorerUrl: r.explorerUrl,
+                        notionalUsdc: agent.executionLegs[idx]!.notionalUsdc,
+                        ts: Date.now(),
+                    })),
+                ];
+                addRunToPortfolio({
+                    id: newEventId(),
+                    walletPubkey: walletPda,
+                    agentId: agent.id,
+                    agentName: agent.name,
+                    delegatedUsdc: delegatedAmountUsdc,
+                    receipts: portfolioReceipts,
+                    startedAt: Date.now() - 13000,
+                    completedAt: Date.now(),
+                });
+
                 succeed(finalSig);
             };
         },
         [
+            addRunToPortfolio,
             agent,
             appendEvent,
             broadcastReceipt,

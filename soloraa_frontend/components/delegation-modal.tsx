@@ -56,14 +56,15 @@ export function DelegationModal({
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
+                    transition={{ duration: 0.1 }}
                     className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center bg-bg/72 px-3 py-4 sm:px-4 sm:py-8 backdrop-blur-[10px] overflow-y-auto"
                     onClick={onClose}
                 >
                     <motion.div
-                        initial={{ opacity: 0, y: 24, scale: 0.985 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: 18, scale: 0.985 }}
-                        transition={{ duration: 0.24, ease: [0.21, 1.02, 0.73, 1] }}
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 6 }}
+                        transition={{ duration: 0.12, ease: "easeOut" }}
                         className="w-full max-w-5xl max-h-[92vh] overflow-y-auto rounded-[22px] sm:rounded-[28px] border border-line-bright bg-bg-surface shadow-[0_28px_100px_rgba(0,0,0,0.45)]"
                         onClick={(event) => event.stopPropagation()}
                     >
