@@ -1,5 +1,3 @@
-
-
 use crate::error::{EnclaveError, EnclaveResult};
 use crate::intent::{
     arbitrary_cpi_payload_hash, build_intent_message, transfer_payload_hash, AccountMetaFlags,
@@ -66,10 +64,6 @@ impl<'a> PolicyEngine<'a> {
         if !wallet.is_active_bool() {
             return Err(EnclaveError::WalletPaused);
         }
-        // For a pure transfer there's no oracle stage, but we still respect
-
-
-
         let (bh_slot, recent_blockhash) = self.rpc.get_most_recent_slot_hash().await?;
         let payload_hash = transfer_payload_hash(&req.destination, req.amount_lamports);
 
@@ -128,7 +122,6 @@ impl<'a> PolicyEngine<'a> {
             });
         }
 
-        // Oracle stage: verify Pyth update via Wormhole guardians.
         let bytes = self
             .hermes
             .fetch_latest_update(req.pyth_feed_id_hex)
@@ -177,8 +170,6 @@ impl<'a> PolicyEngine<'a> {
     }
 }
 
-/// Worst-case execution price under buy/sell direction. Buy adds 1×conf;
-/// sell subtracts 1×conf. Same convention as the parked Phala enclave.
 fn expected_execution_price_e8(price: VerifiedPrice, side_is_buy: bool) -> EnclaveResult<i64> {
     let conf = i64::try_from(price.conf_e8).map_err(|_| EnclaveError::PriceMath)?;
     if side_is_buy {

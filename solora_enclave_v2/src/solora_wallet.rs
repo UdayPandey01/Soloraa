@@ -1,5 +1,3 @@
-
-
 use bytemuck::{Pod, Zeroable};
 
 use crate::error::{EnclaveError, EnclaveResult};

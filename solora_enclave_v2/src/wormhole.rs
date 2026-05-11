@@ -1,5 +1,3 @@
-
-
 use secp256k1::ecdsa::{RecoverableSignature, RecoveryId};
 use secp256k1::{Message, Secp256k1};
 use tiny_keccak::{Hasher, Keccak};
@@ -219,12 +217,9 @@ pub fn verify_vaa<'a>(vaa: &'a VaaParsed, guardians: &GuardianSet) -> EnclaveRes
     for sig in &vaa.signatures {
         let idx = sig.guardian_index as usize;
         if idx >= guardians.addresses.len() {
-            // Out-of-range index: don't count, don't error — strict per-guardian
-            // failures shouldn't fail the whole VAA if we still have quorum.
             continue;
         }
         if !seen_indices.insert(sig.guardian_index) {
-
             continue;
         }
         let recovered = match recover_eth_address(&digest, &sig.signature, sig.recovery_id) {

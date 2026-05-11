@@ -1,5 +1,3 @@
-
-
 use ed25519_dalek::{SigningKey, VerifyingKey, SECRET_KEY_LENGTH};
 use rand::rngs::OsRng;
 use std::path::PathBuf;

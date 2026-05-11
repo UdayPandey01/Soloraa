@@ -1,5 +1,3 @@
-
-
 pub mod attestation;
 pub mod enclave_key;
 pub mod error;
