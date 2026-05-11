@@ -1,0 +1,172 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Design tokens ──────────────────────────────────────────────────────────
+ *
+ * Single-accent matte-black system. The point isn't to look dark — it's to
+ * feel like infrastructure. Backgrounds are unmodulated, borders are one
+ * weight, text has three levels, color appears only where state is changing.
+ */
+
+:root {
+    /* Surfaces — pure neutral graphite. Slight cool tint at the deepest level. */
+    --bg: 230 8% 6%; /* #0E0F10 */
+    --bg-surface: 230 6% 8%;
+    --bg-raised: 230 6% 11%;
+
+    /* Text — high-contrast head, two graytones, one barely-there. */
+    --fg: 210 8% 96%;
+    --fg-soft: 215 6% 80%;
+    --fg-muted: 220 5% 58%;
+    --fg-dim: 220 4% 38%;
+
+    /* Borders — single weight, slightly brighter variant for active state. */
+    --line: 220 5% 16%;
+    --line-bright: 220 5% 22%;
+
+    /* The single accent. Cool indigo-blue, calibrated for restraint. */
+    --accent: 220 100% 74%; /* #7BA3FF */
+
+    /* State colors. Muted on purpose — they shouldn't ever dominate. */
+    --ok: 162 38% 64%; /* #7FCDB8 */
+    --warn: 38 60% 70%;
+    --danger: 354 64% 68%; /* #E27C8A */
+
+    --font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, sans-serif;
+    --font-mono: "Geist Mono", ui-monospace, "SF Mono", "JetBrains Mono", monospace;
+}
+
+* {
+    border-color: hsl(var(--line));
+}
+
+html,
+body {
+    background: hsl(var(--bg));
+    color: hsl(var(--fg));
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+}
+
+body {
+    min-height: 100vh;
+}
+
+/* Subtle grid — only as an accent in hero/landing, not body-wide. */
+.grid-overlay {
+    background-image:
+        linear-gradient(hsl(var(--line) / 0.55) 1px, transparent 1px),
+        linear-gradient(to right, hsl(var(--line) / 0.55) 1px, transparent 1px);
+    background-size: 64px 64px;
+    mask-image: radial-gradient(ellipse 60% 50% at 50% 30%, #000 30%, transparent 80%);
+    -webkit-mask-image: radial-gradient(ellipse 60% 50% at 50% 30%, #000 30%, transparent 80%);
+}
+
+::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+::-webkit-scrollbar-thumb {
+    background: hsl(var(--line-bright));
+    border-radius: 8px;
+    border: 2px solid hsl(var(--bg));
+}
+::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--fg-dim));
+}
+
+*:focus-visible {
+    outline: 1px solid hsl(var(--accent));
+    outline-offset: 2px;
+    border-radius: 4px;
+}
+
+::selection {
+    background: hsl(var(--accent) / 0.3);
+    color: hsl(var(--fg));
+}
+
+@layer utilities {
+    .nums {
+        font-variant-numeric: tabular-nums;
+    }
+    /* For numeric readouts that need to stay aligned. */
+    .mono-num {
+        font-family: var(--font-mono);
+        font-variant-numeric: tabular-nums;
+    }
+}
+
+/* Wallet adapter restyling — drop their gradient default, match our surface. */
+.wallet-adapter-button-trigger {
+    background: hsl(var(--bg-surface)) !important;
+    border: 1px solid hsl(var(--line-bright)) !important;
+    color: hsl(var(--fg)) !important;
+    border-radius: 8px !important;
+    height: 36px !important;
+    font-size: 13px !important;
+    font-weight: 500 !important;
+    font-family: var(--font-sans) !important;
+    padding: 0 14px !important;
+    transition: all 160ms ease !important;
+    box-shadow: none !important;
+}
+.wallet-adapter-button-trigger:hover:not([disabled]) {
+    background: hsl(var(--bg-raised)) !important;
+    border-color: hsl(var(--fg-dim)) !important;
+}
+.wallet-adapter-button {
+    background: hsl(var(--bg-surface)) !important;
+    color: hsl(var(--fg)) !important;
+    border: 1px solid hsl(var(--line-bright)) !important;
+    border-radius: 12px !important;
+    box-shadow: none !important;
+}
+.wallet-adapter-button:hover:not([disabled]) {
+    background: hsl(var(--bg-raised)) !important;
+}
+.wallet-adapter-modal,
+.wallet-adapter-modal-container,
+.wallet-adapter-modal-wrapper {
+    background: hsl(var(--bg-surface)) !important;
+    border-color: hsl(var(--line-bright)) !important;
+}
+.wallet-adapter-modal-wrapper {
+    border: 1px solid hsl(var(--line-bright)) !important;
+    box-shadow: 0 30px 90px rgba(0, 0, 0, 0.45) !important;
+    border-radius: 24px !important;
+}
+.wallet-adapter-modal-title {
+    color: hsl(var(--fg)) !important;
+}
+.wallet-adapter-modal-button {
+    background: hsl(var(--bg-raised)) !important;
+    color: hsl(var(--fg)) !important;
+    border: 1px solid hsl(var(--line-bright)) !important;
+    border-radius: 14px !important;
+}
+.wallet-adapter-modal-button:hover {
+    border-color: hsl(var(--fg-dim)) !important;
+}
+.wallet-adapter-modal-list {
+    margin: 16px 0 0 !important;
+    padding: 0 !important;
+}
+.wallet-adapter-modal-list-item {
+    background: transparent !important;
+    border: 1px solid hsl(var(--line)) !important;
+    border-radius: 16px !important;
+    transition: background 160ms ease, border-color 160ms ease;
+}
+.wallet-adapter-modal-list-item:hover {
+    background: hsl(var(--bg-raised)) !important;
+    border-color: hsl(var(--line-bright)) !important;
+}
+.wallet-adapter-modal-list-more {
+    color: hsl(var(--fg-muted)) !important;
+}
