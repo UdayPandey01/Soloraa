@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { Route } from "next";
 import { CLUSTER, PROGRAM_ID } from "@/lib/solora";
 
 export function Footer() {
@@ -59,12 +60,12 @@ function FooterColumn({
     );
 }
 
-function FooterLink({
+function FooterLink<T extends string>({
     href,
     external,
     children,
 }: {
-    href: string;
+    href: Route<T>;
     external?: boolean;
     children: React.ReactNode;
 }) {
