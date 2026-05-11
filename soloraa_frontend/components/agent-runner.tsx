@@ -21,7 +21,13 @@ import { Card, CardBody } from "@/components/ui/card";
 import { PipelineTrack } from "@/components/pipeline-track";
 import { EventFeed } from "@/components/event-feed";
 import { DelegationModal } from "@/components/delegation-modal";
-import { type Agent, formatUsdc } from "@/lib/agents";
+import {
+    type Agent,
+    formatUsdc,
+    interpolate,
+    legNotionalUsdc,
+    legVariables,
+} from "@/lib/agents";
 import { sendMemo, shortSig } from "@/lib/devnet-tx";
 import { CLUSTER } from "@/lib/solora";
 
@@ -149,15 +155,19 @@ export function AgentRunner({ agent }: AgentRunnerProps) {
                 agent.config.stopLossBpsDefault ||
                 Math.max(60, agent.riskScore * 45);
             const walletShort = `${walletPda.slice(0, 4)}…${walletPda.slice(-4)}`;
+            const copy = agent.executionCopy;
+            const stageVars = {
+                agentName: agent.name,
+                walletShort,
+                delegated: amountLabel,
+                maxTrade: formatUsdc(agent.config.maxTradeUsdcDefault),
+                maxLossBps,
+            };
 
             schedule(300, () => {
                 setStage("intent", "active");
                 appendEvent(
-                    ev(
-                        "intent",
-                        "Intent received",
-                        `${agent.name}: signed intent submitted from ${walletShort}. Delegated cap ${amountLabel} USDC.`
-                    )
+                    ev("intent", "Intent received", interpolate(copy.intentDetail, stageVars))
                 );
             });
             schedule(1500, () => setStage("intent", "ok"));
@@ -165,24 +175,14 @@ export function AgentRunner({ agent }: AgentRunnerProps) {
             schedule(1700, () => {
                 setStage("policy", "active");
                 appendEvent(
-                    ev(
-                        "policy",
-                        "Policy evaluated",
-                        `delegated ${amountLabel} USDC · max trade ${formatUsdc(agent.config.maxTradeUsdcDefault)} · max loss ${maxLossBps} bps · allowlist ok.`
-                    )
+                    ev("policy", "Policy evaluated", interpolate(copy.policyDetail, stageVars))
                 );
             });
             schedule(3200, () => setStage("policy", "ok"));
 
             schedule(3400, () => {
                 setStage("oracle", "active");
-                appendEvent(
-                    ev(
-                        "oracle",
-                        "Pyth update verified",
-                        "Fresh price window accepted · Wormhole guardian quorum reached · merkle proof to feed_id checks out."
-                    )
-                );
+                appendEvent(ev("oracle", copy.oracleTitle, copy.oracleDetail));
             });
             schedule(5200, () => setStage("oracle", "ok"));
 
@@ -204,14 +204,9 @@ export function AgentRunner({ agent }: AgentRunnerProps) {
             schedule(7200, () => {
                 setStage("sign", "active");
                 appendEvent(
-                    ev(
-                        "sign",
-                        "Enclave signed intent",
-                        "Sealed Ed25519 key produced a 64-byte signature inside the TEE.",
-                        {
-                            code: "ed25519: 7e2c f04b a91d 8e30 c517 6a44 d2b1 90ef …",
-                        }
-                    )
+                    ev("sign", "Enclave signed intent", copy.signDetail, {
+                        code: "ed25519: 7e2c f04b a91d 8e30 c517 6a44 d2b1 90ef …",
+                    })
                 );
             });
             schedule(9000, () => setStage("sign", "ok"));
@@ -219,11 +214,7 @@ export function AgentRunner({ agent }: AgentRunnerProps) {
             schedule(9200, () => {
                 setStage("broadcast", "active");
                 appendEvent(
-                    ev(
-                        "broadcast",
-                        "Assembling transaction",
-                        "ComputeBudget · Ed25519Program (verify ix at index 0) · execute_transfer at index 1."
-                    )
+                    ev("broadcast", "Assembling transaction", copy.broadcastDetail)
                 );
             });
             schedule(11000, () => setStage("broadcast", "ok"));
@@ -231,11 +222,7 @@ export function AgentRunner({ agent }: AgentRunnerProps) {
             schedule(11200, () => {
                 setStage("verify", "active");
                 appendEvent(
-                    ev(
-                        "verify",
-                        "On-chain verifier engaged",
-                        "Ed25519 sysvar · SlotHashes binding · nonce check · payload hash."
-                    )
+                    ev("verify", "On-chain verifier engaged", copy.verifyDetail)
                 );
             });
 
@@ -253,25 +240,39 @@ export function AgentRunner({ agent }: AgentRunnerProps) {
 
             const playRealLegs = async () => {
                 const sigs: DevnetReceipt[] = [];
+                const legNotionals: number[] = [];
                 for (let i = 0; i < agent.executionLegs.length; i += 1) {
                     if (cancelRef.current) return;
                     const leg = agent.executionLegs[i]!;
-                    const memo =
-                        `SOLORA_EXEC|agent=${agent.id}|leg=${i + 1}|kind=${leg.memoKind}|cap=${delegatedAmountUsdc}|ts=${Date.now()}`;
+                    const legVars = legVariables(leg, delegatedAmountUsdc);
+                    const legLabel = interpolate(leg.label, legVars);
+                    const notional = legNotionalUsdc(leg, delegatedAmountUsdc);
+                    legNotionals.push(notional);
+
+                    const memo = `SOLORA_EXEC|agent=${agent.id}|leg=${i + 1}|kind=${leg.memoKind}|cap=${delegatedAmountUsdc}|notional=${notional}|ts=${Date.now()}`;
                     appendEvent(
-                        ev("broadcast", `Leg ${i + 1}/${agent.executionLegs.length} — broadcasting`, leg.detail)
+                        ev(
+                            "broadcast",
+                            `Leg ${i + 1}/${agent.executionLegs.length} — broadcasting`,
+                            leg.detail
+                        )
                     );
                     try {
-                        const receipt = await broadcastReceipt(leg.label, memo);
+                        const receipt = await broadcastReceipt(legLabel, memo);
                         if (cancelRef.current) return;
                         sigs.push(receipt);
                         setExecutionReceipts((prev) => [...prev, receipt]);
-                        setUtilizedCapital((prev) => prev + leg.notionalUsdc);
+                        setUtilizedCapital((prev) => prev + notional);
                         appendEvent(
-                            ev("verify", leg.label, `Confirmed on Solana ${CLUSTER}. Notional ${formatUsdc(leg.notionalUsdc)} USDC.`, {
-                                txSignature: receipt.signature,
-                                explorerUrl: receipt.explorerUrl,
-                            })
+                            ev(
+                                "verify",
+                                legLabel,
+                                `Confirmed on Solana ${CLUSTER}. Notional ${formatUsdc(notional)} USDC.`,
+                                {
+                                    txSignature: receipt.signature,
+                                    explorerUrl: receipt.explorerUrl,
+                                }
+                            )
                         );
                     } catch (err) {
                         appendEvent(
@@ -294,10 +295,7 @@ export function AgentRunner({ agent }: AgentRunnerProps) {
 
                 if (cancelRef.current) return;
                 const finalSig = sigs[sigs.length - 1]?.signature ?? approval.signature;
-                const cumulativeNotional = sigs.reduce(
-                    (acc, _, idx) => acc + agent.executionLegs[idx]!.notionalUsdc,
-                    0
-                );
+                const cumulativeNotional = legNotionals.reduce((a, b) => a + b, 0);
                 appendEvent(
                     ev(
                         "verify",
@@ -319,7 +317,7 @@ export function AgentRunner({ agent }: AgentRunnerProps) {
                         label: r.label,
                         signature: r.signature,
                         explorerUrl: r.explorerUrl,
-                        notionalUsdc: agent.executionLegs[idx]!.notionalUsdc,
+                        notionalUsdc: legNotionals[idx] ?? 0,
                         ts: Date.now(),
                     })),
                 ];

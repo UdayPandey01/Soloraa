@@ -32,14 +32,20 @@ export interface AgentConfigSchema {
 }
 
 export interface AgentExecutionLeg {
-    /** Short label shown in the live execution feed. */
     label: string;
-    /** Human-readable detail. */
     detail: string;
-    /** Memo-program payload prefix for the real devnet tx. */
     memoKind: string;
-    /** USDC drawdown shown against the delegated balance for this leg. */
-    notionalUsdc: number;
+    notionalFraction: number;
+}
+
+export interface AgentExecutionCopy {
+    intentDetail: string;
+    policyDetail: string;
+    oracleTitle: string;
+    oracleDetail: string;
+    signDetail: string;
+    broadcastDetail: string;
+    verifyDetail: string;
 }
 
 export interface Agent {
@@ -50,20 +56,47 @@ export interface Agent {
     thesis: string;
     risk: AgentRisk;
     status: AgentStatus;
-    /** Subjective risk on a 1–5 scale. Only for the UI bar. */
     riskScore: 1 | 2 | 3 | 4 | 5;
-    /** Backtested-style annualized return, in bps. UI illustration only. */
     simulatedApyBps: number;
-    /** Median seconds between execution attempts. */
     cadenceSecMedian: number;
-    /** Average drawdown observed in simulation, in bps. */
     simulatedDrawdownBps: number;
     protocols: AgentProtocol[];
     config: AgentConfigSchema;
-    /** Deterministic illustrative PnL series — relative cumulative basis points. */
     series: number[];
-    /** Sequence of legs played as real devnet memo txs after mock pipeline. */
     executionLegs: AgentExecutionLeg[];
+    executionCopy: AgentExecutionCopy;
+}
+
+const SOL_USDC_REF = 142;
+
+export function interpolate(
+    template: string,
+    vars: Record<string, string | number>
+): string {
+    return template.replace(/\{(\w+)\}/g, (_, key) =>
+        key in vars ? String(vars[key]) : `{${key}}`
+    );
+}
+
+export function legNotionalUsdc(leg: AgentExecutionLeg, delegatedUsdc: number): number {
+    return Math.round(delegatedUsdc * leg.notionalFraction);
+}
+
+export function legNotionalSol(leg: AgentExecutionLeg, delegatedUsdc: number): number {
+    return legNotionalUsdc(leg, delegatedUsdc) / SOL_USDC_REF;
+}
+
+export function legVariables(
+    leg: AgentExecutionLeg,
+    delegatedUsdc: number
+): { usdc: string; sol: string; pct: string } {
+    const usdc = legNotionalUsdc(leg, delegatedUsdc);
+    const sol = legNotionalSol(leg, delegatedUsdc);
+    return {
+        usdc: usdc.toLocaleString(undefined, { maximumFractionDigits: 0 }),
+        sol: sol.toFixed(sol < 10 ? 3 : 2),
+        pct: `${(leg.notionalFraction * 100).toFixed(0)}%`,
+    };
 }
 
 export const AGENTS: Agent[] = [
@@ -101,24 +134,39 @@ export const AGENTS: Agent[] = [
         ],
         executionLegs: [
             {
-                label: "Quote refresh — bid 142.18",
+                label: "Quote refresh — {sol} SOL bid posted",
                 detail: "Symmetric maker quote on SOL/USDC, 5 bps inside Pyth mid.",
                 memoKind: "mm.quote_refresh",
-                notionalUsdc: 320,
+                notionalFraction: 0.13,
             },
             {
-                label: "Fill confirmed — 12.4 SOL",
+                label: "Maker fill — {sol} SOL @ bid",
                 detail: "Maker fill against incoming taker. Inventory delta within cap.",
                 memoKind: "mm.fill",
-                notionalUsdc: 760,
+                notionalFraction: 0.30,
             },
             {
-                label: "Inventory rebalance",
+                label: "Inventory trim — {usdc} USDC",
                 detail: "Trim long inventory back to neutral target band.",
                 memoKind: "mm.rebalance",
-                notionalUsdc: 180,
+                notionalFraction: 0.07,
             },
         ],
+        executionCopy: {
+            intentDetail:
+                "{agentName}: maker quote intent from {walletShort} · cap {delegated} USDC.",
+            policyDetail:
+                "delegated {delegated} USDC · max trade {maxTrade} USDC · inventory cap 50% · spread floor 8 bps.",
+            oracleTitle: "Pyth SOL/USDC verified",
+            oracleDetail:
+                "Mid 142.18 · confidence 4 bps · Wormhole guardians 13/19 · merkle proof binds feed_id.",
+            signDetail:
+                "Sealed Ed25519 key signed Phoenix place_limit_order_with_free_funds intent.",
+            broadcastDetail:
+                "ComputeBudget · Ed25519Program (verify ix at index 0) · Phoenix place_limit_order_with_free_funds at index 1.",
+            verifyDetail:
+                "Ed25519 sysvar match · SlotHashes binding · nonce check · payload hash bound to (price, side, qty).",
+        },
     },
     {
         id: "treasury-rebalance",
@@ -154,24 +202,39 @@ export const AGENTS: Agent[] = [
         ],
         executionLegs: [
             {
-                label: "Drift snapshot — SOL +3.4%",
+                label: "Drift snapshot — SOL +3.4% over band",
                 detail: "SOL overweight vs target band. Generating sell leg into USDC.",
                 memoKind: "treasury.drift_snapshot",
-                notionalUsdc: 1200,
+                notionalFraction: 0.10,
             },
             {
-                label: "Swap leg confirmed (Jupiter v6)",
+                label: "Jupiter swap — {usdc} USDC SOL → USDC",
                 detail: "Routed via Jupiter v6 with 25 bps slippage cap. Verified Pyth mark.",
                 memoKind: "treasury.swap_leg",
-                notionalUsdc: 8400,
+                notionalFraction: 0.70,
             },
             {
-                label: "Position settled — back to target",
-                detail: "Post-trade allocation re-anchored to policy weights.",
+                label: "Allocation re-anchored",
+                detail: "Drift back inside target band. Cooldown re-armed at 6h.",
                 memoKind: "treasury.settle",
-                notionalUsdc: 0,
+                notionalFraction: 0,
             },
         ],
+        executionCopy: {
+            intentDetail:
+                "{agentName}: drift snapshot intent from {walletShort} · cap {delegated} USDC.",
+            policyDetail:
+                "delegated {delegated} USDC · max trade {maxTrade} USDC · drift band ±3% · slippage cap 25 bps.",
+            oracleTitle: "Pyth marks verified",
+            oracleDetail:
+                "SOL · USDC · JTO mark prices fetched · merkle proofs confirmed under guardian set 4.",
+            signDetail:
+                "Sealed Ed25519 key signed Jupiter v6 swap intent for the largest-drift asset.",
+            broadcastDetail:
+                "ComputeBudget · Ed25519Program · Jupiter v6 shared_accounts_route at index 1.",
+            verifyDetail:
+                "Ed25519 sysvar match · SlotHashes binding · nonce check · payload hash bound to (route, slippage).",
+        },
     },
     {
         id: "stablecoin-yield",
@@ -208,24 +271,39 @@ export const AGENTS: Agent[] = [
         ],
         executionLegs: [
             {
-                label: "Probe supply rates — 3 venues",
-                detail: "Kamino 5.4% · Marginfi 4.9% · Solend 5.1% net APY.",
+                label: "Probed lending rates — 3 venues",
+                detail: "Kamino 5.4% · Marginfi 4.9% · Solend 5.1% net APY after fees.",
                 memoKind: "yield.probe_rates",
-                notionalUsdc: 0,
+                notionalFraction: 0,
             },
             {
-                label: "Route migration — Marginfi → Kamino",
+                label: "Migrate {usdc} USDC — Marginfi → Kamino",
                 detail: "Withdraw + deposit pair. Net APY uplift +0.5% after fees.",
                 memoKind: "yield.route_change",
-                notionalUsdc: 5000,
+                notionalFraction: 0.85,
             },
             {
-                label: "Position confirmed on Kamino",
+                label: "Deposit confirmed on Kamino",
                 detail: "Deposit settled. Watch interval resumes at 30m cadence.",
                 memoKind: "yield.confirm",
-                notionalUsdc: 0,
+                notionalFraction: 0,
             },
         ],
+        executionCopy: {
+            intentDetail:
+                "{agentName}: yield rebalance intent for {walletShort} · cap {delegated} USDC.",
+            policyDetail:
+                "delegated {delegated} USDC · max trade {maxTrade} USDC · net-APY floor 4.5% · venues allowlisted (Kamino · Marginfi · Solend).",
+            oracleTitle: "Venue rates verified",
+            oracleDetail:
+                "On-chain reserve state read for each venue. Borrow caps + utilization within policy.",
+            signDetail:
+                "Enclave signed withdraw + deposit pair under a single net-APY-floor guarantee.",
+            broadcastDetail:
+                "ComputeBudget · Ed25519Program · Marginfi withdraw at index 1 · Kamino deposit at index 2.",
+            verifyDetail:
+                "Ed25519 sysvar match · SlotHashes · nonce · payload hash bound to (source venue, dest venue, amount).",
+        },
     },
     {
         id: "dca-allocator",
@@ -260,24 +338,39 @@ export const AGENTS: Agent[] = [
         ],
         executionLegs: [
             {
-                label: "Buy leg #1 — 250 USDC → SOL",
-                detail: "DCA tranche 1/3. Pyth mark + 30 bps slippage cap.",
+                label: "Tranche 1/3 — {usdc} USDC → SOL",
+                detail: "DCA tranche 1/3. Pyth mark + 50 bps slippage cap.",
                 memoKind: "dca.leg_1",
-                notionalUsdc: 250,
+                notionalFraction: 0.07,
             },
             {
-                label: "Buy leg #2 — 250 USDC → SOL",
+                label: "Tranche 2/3 — {usdc} USDC → SOL",
                 detail: "DCA tranche 2/3. Auto-batched with 6s spacing.",
                 memoKind: "dca.leg_2",
-                notionalUsdc: 250,
+                notionalFraction: 0.07,
             },
             {
-                label: "Buy leg #3 — 500 USDC → WBTC",
+                label: "Tranche 3/3 — {usdc} USDC → WBTC",
                 detail: "Cross-basket allocator. WBTC sleeve top-up.",
                 memoKind: "dca.leg_3",
-                notionalUsdc: 500,
+                notionalFraction: 0.10,
             },
         ],
+        executionCopy: {
+            intentDetail:
+                "{agentName}: scheduled tranche intent from {walletShort} · cap {delegated} USDC.",
+            policyDetail:
+                "delegated {delegated} USDC · max trade {maxTrade} USDC · cadence 24h · slippage cap 50 bps.",
+            oracleTitle: "Pyth marks verified",
+            oracleDetail:
+                "SOL/USDC mid 142.31 · WBTC mid 64,820 · confidence intervals inside policy.",
+            signDetail:
+                "Enclave signed Jupiter v6 swap intent for the next-due tranche.",
+            broadcastDetail:
+                "ComputeBudget · Ed25519Program · Jupiter v6 shared_accounts_route at index 1.",
+            verifyDetail:
+                "Ed25519 sysvar match · SlotHashes · nonce · payload hash bound to (input mint, output mint, amount).",
+        },
     },
     {
         id: "arbitrage-monitor",
@@ -313,24 +406,39 @@ export const AGENTS: Agent[] = [
         ],
         executionLegs: [
             {
-                label: "Edge detected — USDC→SOL→USDT",
+                label: "Edge detected — USDC → SOL → USDT loop",
                 detail: "Triangular edge 17 bps net of fees. Above the policy floor.",
                 memoKind: "arb.edge_detected",
-                notionalUsdc: 0,
+                notionalFraction: 0,
             },
             {
-                label: "Hop 1 confirmed — USDC → SOL",
-                detail: "First leg of the loop confirmed. Inventory marked.",
+                label: "Hop 1 — {usdc} USDC → SOL",
+                detail: "First leg of the loop. Inventory marked for the second hop.",
                 memoKind: "arb.hop_1",
-                notionalUsdc: 4200,
+                notionalFraction: 0.42,
             },
             {
-                label: "Loop closed — net +14 bps",
+                label: "Loop closed — net +14 bps captured",
                 detail: "Final hop settled. Inventory back to USDC. Edge captured.",
                 memoKind: "arb.loop_close",
-                notionalUsdc: 4200,
+                notionalFraction: 0.42,
             },
         ],
+        executionCopy: {
+            intentDetail:
+                "{agentName}: triangular edge probe from {walletShort} · cap {delegated} USDC.",
+            policyDetail:
+                "delegated {delegated} USDC · max trade {maxTrade} USDC · edge floor 12 bps · loop length 3 hops · cooldown 5s.",
+            oracleTitle: "Pyth + AMM quotes verified",
+            oracleDetail:
+                "Pyth marks + AMM quotes hashed into the intent. Edge after fees clears the signed floor.",
+            signDetail:
+                "Enclave signed the entire triangular loop as one atomic intent (all-or-nothing).",
+            broadcastDetail:
+                "ComputeBudget · Ed25519Program · Jupiter v6 route_with_token_ledger at index 1.",
+            verifyDetail:
+                "Ed25519 sysvar match · SlotHashes · nonce · payload hash bound to (hops[], min net edge).",
+        },
     },
     {
         id: "portfolio-rebalance",
@@ -369,21 +477,36 @@ export const AGENTS: Agent[] = [
                 label: "Drift check — SOL +2.1% / JTO −1.4%",
                 detail: "Two assets outside their bands. Rebalance approved.",
                 memoKind: "portfolio.drift_check",
-                notionalUsdc: 0,
+                notionalFraction: 0,
             },
             {
-                label: "Rebalance leg — sell SOL",
+                label: "Sell SOL — {usdc} USDC realised",
                 detail: "Trim SOL overweight. Routed via Jupiter v6.",
                 memoKind: "portfolio.sell_sol",
-                notionalUsdc: 2200,
+                notionalFraction: 0.44,
             },
             {
-                label: "Rebalance leg — buy JTO",
+                label: "Buy JTO — {usdc} USDC deployed",
                 detail: "Bring JTO back to its target weight.",
                 memoKind: "portfolio.buy_jto",
-                notionalUsdc: 1400,
+                notionalFraction: 0.28,
             },
         ],
+        executionCopy: {
+            intentDetail:
+                "{agentName}: portfolio drift intent from {walletShort} · cap {delegated} USDC.",
+            policyDetail:
+                "delegated {delegated} USDC · max trade {maxTrade} USDC · drift band ±2% · slippage cap 15 bps.",
+            oracleTitle: "Pyth marks verified",
+            oracleDetail:
+                "SOL · USDC · JTO · JUP · WBTC marks fetched. Reweighting deltas computed.",
+            signDetail:
+                "Enclave signed multi-leg rebalance under a single shared deadline.",
+            broadcastDetail:
+                "ComputeBudget · Ed25519Program · Jupiter v6 shared_accounts_route per asset.",
+            verifyDetail:
+                "Ed25519 sysvar match · SlotHashes · nonce · payload hash bound to (target weights, deadline).",
+        },
     },
 ];
 
