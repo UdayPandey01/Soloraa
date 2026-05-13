@@ -13,38 +13,48 @@ export type StageId =
     | "broadcast"
     | "verify";
 
+/**
+ * High-level run state.
+ *
+ * - idle:    no run has been started.
+ * - running: the agent loop is alive and ticking off cycles.
+ * - stopped: the user pressed Stop. The pipeline halts but the receipts
+ *            collected so far stay on screen.
+ *
+ * Note: there is intentionally no "completed" mode. A real autonomous agent
+ * doesn't have a terminal "done" state — it runs until the user stops it.
+ */
+export type ExecutionMode = "idle" | "running" | "stopped";
+
 export interface ExecutionEvent {
     id: string;
     ts: number;
     stage: StageId;
     title: string;
-    /** Optional structured detail rendered in mono. */
     detail?: string;
-    /** Optional code/hash to display with copy affordance. */
     code?: string;
-    /** Marks an explicit rejection moment (e.g. replay attempt). */
     rejected?: boolean;
-    /** Devnet tx signature for an event tied to a real on-chain action. */
     txSignature?: string;
-    /** Pre-built explorer URL for the signature above. */
     explorerUrl?: string;
 }
 
 export interface ExecutionRun {
-    /** Wallet + agent context for the run. */
     walletPda: string;
     agentId: string;
-    /** Map of stage -> state, drives the pipeline visualisation. */
     stages: Record<StageId, StageState>;
-    /** Ordered event log. */
     events: ExecutionEvent[];
-    /** Final tx signature when broadcast lands; undefined while running. */
-    txSignature?: string;
-    /** Set when an on-chain rejection fires (replay etc.). */
-    rejection?: { code: number; name: string; description: string };
-    /** Anchor program nonce after success. Drives replay-demo state. */
+    /** Signature of the most recent successful leg. Drives the explorer link
+     *  and the replay-attack demo (which reuses these bytes). */
+    lastTxSignature?: string;
+    /** Cosmetic rejection (e.g. replay-attack demo). Does NOT end the run. */
+    lastRejection?: { code: number; name: string; description: string };
+    /** Bumped on every confirmed leg, mirroring the on-chain nonce. */
     walletNonce: number;
-    running: boolean;
+    /** Count of confirmed broadcasts this run. */
+    legsConfirmed: number;
+    /** Running total of notional broadcast through this run, in USDC. */
+    cumulativeNotionalUsdc: number;
+    mode: ExecutionMode;
 }
 
 interface ExecutionState {
@@ -52,8 +62,14 @@ interface ExecutionState {
     start(opts: { walletPda: string; agentId: string }): void;
     appendEvent(event: ExecutionEvent): void;
     setStage(stage: StageId, state: StageState): void;
-    succeed(txSignature: string): void;
-    reject(rejection: { code: number; name: string; description: string }): void;
+    resetStages(): void;
+    recordSuccess(opts: { txSignature: string; notionalUsdc: number }): void;
+    markRejection(rejection: {
+        code: number;
+        name: string;
+        description: string;
+    }): void;
+    stop(): void;
     reset(): void;
 }
 
@@ -77,15 +93,15 @@ export const useExecution = create<ExecutionState>((set) => ({
                 stages: { ...emptyStages },
                 events: [],
                 walletNonce: 0,
-                running: true,
+                legsConfirmed: 0,
+                cumulativeNotionalUsdc: 0,
+                mode: "running",
             },
         }),
     appendEvent: (event) =>
         set((s) => {
             if (!s.run) return s;
-            return {
-                run: { ...s.run, events: [...s.run.events, event] },
-            };
+            return { run: { ...s.run, events: [...s.run.events, event] } };
         }),
     setStage: (stage, stageState) =>
         set((s) => {
@@ -97,23 +113,39 @@ export const useExecution = create<ExecutionState>((set) => ({
                 },
             };
         }),
-    succeed: (txSignature) =>
+    resetStages: () =>
+        set((s) => {
+            if (!s.run) return s;
+            return { run: { ...s.run, stages: { ...emptyStages } } };
+        }),
+    recordSuccess: ({ txSignature, notionalUsdc }) =>
         set((s) => {
             if (!s.run) return s;
             return {
                 run: {
                     ...s.run,
-                    txSignature,
-                    running: false,
+                    lastTxSignature: txSignature,
                     walletNonce: s.run.walletNonce + 1,
+                    legsConfirmed: s.run.legsConfirmed + 1,
+                    cumulativeNotionalUsdc:
+                        s.run.cumulativeNotionalUsdc + notionalUsdc,
                 },
             };
         }),
-    reject: (rejection) =>
+    markRejection: (rejection) =>
+        set((s) => {
+            if (!s.run) return s;
+            return { run: { ...s.run, lastRejection: rejection } };
+        }),
+    stop: () =>
         set((s) => {
             if (!s.run) return s;
             return {
-                run: { ...s.run, rejection, running: false },
+                run: {
+                    ...s.run,
+                    mode: "stopped",
+                    stages: { ...emptyStages },
+                },
             };
         }),
     reset: () => set({ run: null }),
