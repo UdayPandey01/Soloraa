@@ -768,8 +768,8 @@ export function AgentRunner({ agent }: AgentRunnerProps) {
                 </div>
             )}
 
-            <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
-                <aside className="rounded-xl border border-line bg-bg-surface/40 p-5 sm:p-6">
+            <div className="grid gap-6 lg:grid-cols-[320px_1fr] lg:h-[640px]">
+                <aside className="rounded-xl border border-line bg-bg-surface/40 p-5 sm:p-6 overflow-y-auto">
                     <div className="mb-5 flex items-center justify-between">
                         <h3 className="text-[13.5px] font-medium text-fg">Execution pipeline</h3>
                         {run?.lastRejection ? (
@@ -861,8 +861,8 @@ export function AgentRunner({ agent }: AgentRunnerProps) {
                     )}
                 </aside>
 
-                <div className="rounded-xl border border-line bg-bg-surface/40 p-5 sm:p-6">
-                    <header className="mb-5 flex items-center justify-between">
+                <div className="flex flex-col min-h-0 rounded-xl border border-line bg-bg-surface/40 p-5 sm:p-6">
+                    <header className="mb-5 flex items-center justify-between shrink-0">
                         <h3 className="text-[13.5px] font-medium text-fg">Execution feed</h3>
                         <p className="font-mono text-[11px] text-fg-dim">
                             {run?.events.length ?? 0} events

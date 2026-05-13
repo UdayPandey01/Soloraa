@@ -26,14 +26,14 @@ export function EventFeed({ events, newestFirst = true }: EventFeedProps) {
 
     if (events.length === 0) {
         return (
-            <div className="flex items-center justify-center h-40 text-[13px] text-fg-dim">
+            <div className="flex items-center justify-center min-h-40 flex-1 text-[13px] text-fg-dim">
                 Run the agent to stream live execution events.
             </div>
         );
     }
 
     return (
-        <ol className="space-y-2.5 max-h-[520px] overflow-y-auto pr-1">
+        <ol className="space-y-2.5 flex-1 min-h-0 overflow-y-auto pr-1">
             <AnimatePresence initial={false}>
                 {ordered.map((event) => (
                     <motion.li
