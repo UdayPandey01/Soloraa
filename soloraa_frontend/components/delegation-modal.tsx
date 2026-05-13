@@ -143,7 +143,7 @@ export function DelegationModal({
                                                     Tune the capital envelope for this run.
                                                 </p>
                                             </div>
-                                            <Badge tone="neutral">demo vault</Badge>
+                                            <Badge tone="neutral">session vault</Badge>
                                         </div>
 
                                         <div className="rounded-2xl border border-line bg-bg-surface px-4 py-4">

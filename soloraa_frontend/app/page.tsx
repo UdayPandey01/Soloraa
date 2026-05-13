@@ -29,10 +29,12 @@ function FinalCta() {
                             Run an attested agent in two clicks.
                         </h2>
                         <p className="mt-4 sm:mt-5 text-[15px] sm:text-[17px] leading-[1.55] text-fg-muted">
-                            Connect a wallet, delegate a bounded amount, and step through
-                            the cryptographic execution lifecycle in real time. Real
-                            devnet legs broadcast after the pipeline, and the replay
-                            demo is one click away.
+                            Connect a wallet, delegate a bounded amount of SOL, and run
+                            an autonomous agent inside a cryptographically constrained
+                            execution pipeline. Every cycle is a real Solana devnet
+                            transaction signed by an attested session key — not your
+                            wallet — and the on-chain verifier rejects anything outside
+                            policy.
                         </p>
                         <div className="mt-7 sm:mt-8 flex flex-wrap items-center gap-3">
                             <Link

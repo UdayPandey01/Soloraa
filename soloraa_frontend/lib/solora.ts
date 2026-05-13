@@ -8,9 +8,6 @@ export const PROGRAM_ID =
     process.env.NEXT_PUBLIC_SOLORA_PROGRAM_ID ??
     "DfPLBwWW72YKYt81eVUznE1amapTtXroFGTdGqHo1Ttf";
 
-export const DEMO_VAULT_PUBKEY =
-    process.env.NEXT_PUBLIC_SOLORA_DEMO_VAULT_PUBKEY ?? PROGRAM_ID;
-
 export const CLUSTER =
     (process.env.NEXT_PUBLIC_SOLANA_CLUSTER as
         | "localnet"
@@ -87,8 +84,6 @@ export const PIPELINE_STAGES = [
         detail: "Program re-checks every field. Bumps wallet.nonce on success.",
     },
 ] as const;
-
-export type PipelineStageId = (typeof PIPELINE_STAGES)[number]["id"];
 
 /** Errors the on-chain verifier can throw. Mirrors `error.rs`. */
 export const ERROR_CATALOG: Record<number, { name: string; description: string }> = {
