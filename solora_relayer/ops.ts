@@ -123,6 +123,18 @@ async function main() {
                 logMetric
             );
             break;
+        case "register-oyster-enclave":
+            await registerOysterEnclave(
+                program,
+                governor,
+                walletPda,
+                registryPda,
+                connection,
+                parsedArgs,
+                logEvent,
+                logMetric
+            );
+            break;
         case "allowlist":
             await manageAllowlist(program, authority, walletPda, parsedArgs, logEvent, logMetric);
             break;
@@ -472,6 +484,155 @@ async function main() {
         await connection.confirmTransaction(sig, "confirmed");
         log("info", "register_enclave_v2_ok", { signature: sig });
         metric("tx_sent", 1, { op: "register_enclave_v2" });
+    }
+
+    /**
+     * End-to-end registration of a Marlin Oyster enclave deployment:
+     *
+     *   1. Pull the enclave's pubkey from its HTTP `/pubkey` endpoint.
+     *   2. Fetch + parse the attestation document from the Oyster CVM.
+     *   3. Sanity-check that the attestation binds to the same pubkey.
+     *   4. Add PCR0 to the on-chain MeasurementRegistry (if not already).
+     *   5. Call register_enclave_v2 to bind the enclave to the wallet PDA.
+     *
+     * Flags:
+     *   --oyster-url <url>      (required)  Deployed Oyster CVM URL
+     *   --enclave-url <url>     (optional)  Defaults to --oyster-url
+     *   --label <name>          (optional)  Human-readable measurement label
+     *   --expiry-slots <n>      (optional)  Attestation proof expiry
+     *   --measurement <hex32>   (optional)  Skip Oyster fetch, register this PCR0 directly
+     */
+    async function registerOysterEnclave(
+        program: anchor.Program,
+        governor: web3.Keypair,
+        walletPda: web3.PublicKey,
+        registryPda: web3.PublicKey,
+        connection: web3.Connection,
+        parsed: ReturnType<typeof parseArgs>,
+        log: typeof logEvent,
+        metric: typeof logMetric
+    ) {
+        const {
+            fetchAndParseOysterAttestation,
+            assertBindsPubkey,
+            assertFresh,
+        } = await import("./oyster_attestation.js");
+
+        const oysterUrl =
+            parsed.getSingle("oyster-url") ?? process.env.SOLORA_OYSTER_URL;
+        const measurementOverride = parsed.getSingle("measurement");
+        if (!oysterUrl && !measurementOverride) {
+            throw new Error(
+                "register-oyster-enclave: pass --oyster-url <https://...> " +
+                    "(or set SOLORA_OYSTER_URL), or pass --measurement <hex32> to skip Oyster fetch."
+            );
+        }
+
+        const enclaveUrl =
+            parsed.getSingle("enclave-url") ??
+            process.env.SOLORA_ENCLAVE_URL ??
+            oysterUrl;
+        if (!enclaveUrl) {
+            throw new Error("could not resolve --enclave-url");
+        }
+        const label = parsed.getSingle("label") ?? "marlin-oyster";
+        const expirySlots = BigInt(
+            parsed.getSingle("expiry-slots") ??
+                process.env.SOLORA_ATTEST_EXPIRY_SLOTS ??
+                "200"
+        );
+
+        // 1. Pull the enclave pubkey from its HTTP API.
+        log("info", "oyster_pubkey_fetch_start", { url: enclaveUrl });
+        const pubkeyResp = await fetch(`${enclaveUrl.replace(/\/$/, "")}/pubkey`);
+        if (!pubkeyResp.ok) {
+            throw new Error(
+                `enclave /pubkey returned HTTP ${pubkeyResp.status} — is the enclave up?`
+            );
+        }
+        const pubkeyBody = (await pubkeyResp.json()) as { pubkey_base58?: string };
+        if (!pubkeyBody.pubkey_base58) {
+            throw new Error("enclave /pubkey response missing pubkey_base58");
+        }
+        const enclavePubkey = new web3.PublicKey(pubkeyBody.pubkey_base58);
+        const enclavePubkeyBytes = enclavePubkey.toBytes();
+        log("info", "oyster_pubkey_ok", { pubkey: enclavePubkey.toBase58() });
+
+        // 2. Fetch + parse the attestation (unless overridden).
+        let pcr0Hex: string;
+        if (measurementOverride) {
+            log("warn", "oyster_attestation_skipped", {
+                reason: "--measurement override supplied",
+            });
+            pcr0Hex = measurementOverride.replace(/^0x/, "");
+            if (pcr0Hex.length !== 64) {
+                throw new Error("--measurement must be 32 bytes hex (64 chars)");
+            }
+        } else {
+            log("info", "oyster_attestation_fetch_start", { url: oysterUrl });
+            const attestation = await fetchAndParseOysterAttestation(oysterUrl!, {
+                publicKey: enclavePubkeyBytes,
+            });
+            // Sanity checks — defends against URL-swap attacks. Note: real
+            // COSE-Sign1 verification still TODO; see oyster_attestation.ts.
+            assertBindsPubkey(attestation, enclavePubkeyBytes);
+            assertFresh(attestation);
+            pcr0Hex = Buffer.from(attestation.pcr0).toString("hex");
+            log("info", "oyster_attestation_ok", {
+                pcr0: pcr0Hex,
+                pubkey: enclavePubkey.toBase58(),
+                timestamp_ms: attestation.timestampMs,
+                pcr_count: Object.keys(attestation.pcrs).length,
+            });
+        }
+
+        // 3. Add the measurement on-chain (idempotent — will error if already present).
+        log("info", "oyster_add_measurement_start", { pcr: pcr0Hex });
+        try {
+            await program.methods
+                .addMeasurement(Array.from(Buffer.from(pcr0Hex, "hex")), label)
+                .accounts({
+                    registry: registryPda,
+                    governor: governor.publicKey,
+                })
+                .signers([governor])
+                .rpc();
+            log("info", "oyster_add_measurement_ok", { pcr: pcr0Hex });
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            if (msg.includes("MeasurementAlreadyPresent") || msg.includes("already in use")) {
+                log("info", "oyster_measurement_already_present", { pcr: pcr0Hex });
+            } else {
+                throw err;
+            }
+        }
+
+        // 4. Build register_enclave_v2 args and submit.
+        const synthesizedArgs = parseArgs([
+            "--measurement",
+            pcr0Hex,
+            "--expiry-slots",
+            expirySlots.toString(),
+            "--enclave-url",
+            enclaveUrl,
+        ]);
+        await registerEnclaveV2(
+            program,
+            governor,
+            walletPda,
+            registryPda,
+            connection,
+            synthesizedArgs,
+            log,
+            metric
+        );
+
+        log("info", "oyster_registration_complete", {
+            wallet: walletPda.toBase58(),
+            enclave: enclavePubkey.toBase58(),
+            measurement: pcr0Hex,
+        });
+        metric("oyster_registrations", 1);
     }
 
     async function manageAllowlist(
@@ -1120,7 +1281,7 @@ async function main() {
     }
 
     function usage() {
-        console.log(`solora ops\n\nCommands:\n  init-registry\n  add-measurement --pcr <hex32> [--label <name>]\n  revoke-measurement --pcr <hex32>\n  transfer-governor --new <pubkey>\n  init-wallet [--enclave-url <url> | --enclave-pubkey <pubkey> | --mock-enclave <path>]\n  register-enclave-v2 --measurement <hex32> [--expiry-slots <n>]\n  allowlist <add|remove> <programId>\n  transfer <destination> [--amount <lamports>] [--replay]\n  cpi --system-transfer --destination <pubkey> --amount <lamports> [--replay]\n  cpi --target <program> --data <hex> [--account <pubkey:signer:writable>]...\n  demo-local\n  demo-devnet\n`);
+        console.log(`solora ops\n\nCommands:\n  init-registry\n  add-measurement --pcr <hex32> [--label <name>]\n  revoke-measurement --pcr <hex32>\n  transfer-governor --new <pubkey>\n  init-wallet [--enclave-url <url> | --enclave-pubkey <pubkey> | --mock-enclave <path>]\n  register-enclave-v2 --measurement <hex32> [--expiry-slots <n>]\n  register-oyster-enclave --oyster-url <url> [--enclave-url <url>] [--label <name>] [--expiry-slots <n>]\n  allowlist <add|remove> <programId>\n  transfer <destination> [--amount <lamports>] [--replay]\n  cpi --system-transfer --destination <pubkey> --amount <lamports> [--replay]\n  cpi --target <program> --data <hex> [--account <pubkey:signer:writable>]...\n  demo-local\n  demo-devnet\n`);
     }
 }
 
