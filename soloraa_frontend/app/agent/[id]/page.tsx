@@ -162,7 +162,7 @@ export default async function AgentDetailPage({ params }: PageProps) {
                         label="Allowed tokens"
                         value={cfg.allowedTokens.join(" · ")}
                     />
-                    <PolicyField label="Enclave signer" value="attested · Nitro v1" />
+                    <PolicyField label="Enclave signer" value="enclave (devnet)" />
                 </div>
             </section>
 
@@ -171,12 +171,14 @@ export default async function AgentDetailPage({ params }: PageProps) {
                 <h2 className="text-display-3 text-fg">Live execution</h2>
                 <p className="mt-2 text-[13.5px] sm:text-[14px] text-fg-muted max-w-2xl">
                     Press <span className="text-fg">Run agent</span> to open the
-                    delegation vault, approve a bounded amount, and step through the
-                    cryptographic execution pipeline. Once confirmed, three real
-                    on-chain legs broadcast to Solana devnet — each one a fresh tx
-                    signature you can open in Explorer. Then press{" "}
-                    <span className="text-fg">Simulate replay attack</span> to watch
-                    the verifier refuse a re-broadcast with{" "}
+                    delegation vault, approve a bounded amount, and start the
+                    continuous quote / fill / rebalance cycle. The pipeline runs
+                    every ~8s — each cycle broadcasts a fresh devnet tx signature
+                    you can open in Explorer. Press <span className="text-fg">Stop agent</span>{" "}
+                    at any time; the enclave only signs what your policy allows.
+                    After stopping, press{" "}
+                    <span className="text-fg">Simulate replay attack</span> on the
+                    last signed leg to watch the verifier refuse a re-broadcast with{" "}
                     <code className="font-mono text-fg-soft">IntentNonceMismatch · 6018</code>.
                 </p>
                 <div className="mt-6">

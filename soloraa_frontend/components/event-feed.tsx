@@ -33,7 +33,7 @@ export function EventFeed({ events, newestFirst = true }: EventFeedProps) {
     }
 
     return (
-        <ol className="space-y-2.5">
+        <ol className="space-y-2.5 max-h-[520px] overflow-y-auto pr-1">
             <AnimatePresence initial={false}>
                 {ordered.map((event) => (
                     <motion.li

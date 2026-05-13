@@ -12,7 +12,8 @@ import type { Agent } from "@/lib/agents";
 interface DelegationModalProps {
     open: boolean;
     agent: Agent;
-    delegatedAmountUsdc: number;
+    delegatedAmountSol: number;
+    walletBalanceSol: number | null;
     approvalStatus: "idle" | "signing" | "confirming" | "confirmed" | "failed";
     approvalSignature?: string;
     approvalExplorerUrl?: string;
@@ -23,13 +24,18 @@ interface DelegationModalProps {
     onClose: () => void;
     onApprove: () => void;
     onConnectWallet: () => void;
-    onAmountChange: (amount: number) => void;
+    onAmountChange: (sol: number) => void;
 }
+
+/** Reference SOL/USDC price for the informational USD equivalent shown next
+ *  to the SOL amount. Devnet has no live SOL/USDC feed in this build. */
+const REF_SOL_USDC = 142;
 
 export function DelegationModal({
     open,
     agent,
-    delegatedAmountUsdc,
+    delegatedAmountSol,
+    walletBalanceSol,
     approvalStatus,
     approvalSignature,
     approvalExplorerUrl,
@@ -42,12 +48,16 @@ export function DelegationModal({
     onConnectWallet,
     onAmountChange,
 }: DelegationModalProps) {
-    const amountMin = 0;
-    const amountMax = Math.min(agent.config.capitalUsdcMax, 25_000);
+    const amountMin = 0.01;
+    const ceiling = walletBalanceSol != null
+        ? Math.max(amountMin, walletBalanceSol - 0.01)
+        : 1.0;
+    const amountMax = Math.min(1.0, ceiling);
+    const usdEquiv = Math.round(delegatedAmountSol * REF_SOL_USDC);
     const maxLossBps = agent.config.stopLossBpsDefault || Math.max(60, agent.riskScore * 45);
     const estimatedRisk = `${agent.riskScore}/5`;
-    const maxLossUsdc = Math.max(50, Math.round((delegatedAmountUsdc * maxLossBps) / 10_000));
-    const maxTradeUsdc = Math.min(agent.config.maxTradeUsdcDefault, delegatedAmountUsdc);
+    const maxLossSol = +(delegatedAmountSol * maxLossBps / 10_000).toFixed(4);
+    const maxTradeSol = +Math.min(delegatedAmountSol, 0.5).toFixed(3);
 
     return (
         <AnimatePresence>
@@ -113,10 +123,10 @@ export function DelegationModal({
                                         </Badge>
                                     </div>
                                     <p className="mt-3 text-[12.5px] leading-relaxed text-fg-muted">
-                                        This approval anchors the vault receipt on Solana
-                                        {" "}
-                                        {cluster}, then the agent executes three real on-chain
-                                        legs through the cryptographic pipeline.
+                                        This approval funds a session key on Solana{" "}
+                                        {cluster} with a small fee budget. After it
+                                        confirms, the agent runs autonomously — every
+                                        cycle is signed by the session key, not your wallet.
                                     </p>
                                 </div>
                             </div>
@@ -140,15 +150,19 @@ export function DelegationModal({
                                             <div className="flex items-end justify-between gap-4">
                                                 <div>
                                                     <p className="text-[11px] font-mono uppercase tracking-[0.18em] text-fg-dim">
-                                                        Delegated capital
+                                                        Delegate from your wallet
                                                     </p>
                                                     <p className="mt-2 mono-num text-[28px] text-fg">
-                                                        {delegatedAmountUsdc.toLocaleString()} USDC
+                                                        {delegatedAmountSol.toFixed(2)} SOL
+                                                    </p>
+                                                    <p className="mt-1 text-[12px] text-fg-muted">
+                                                        ≈ {usdEquiv} USDC at ${REF_SOL_USDC}/SOL
                                                     </p>
                                                 </div>
-                                                <p className="text-[11.5px] text-fg-muted text-right max-w-28">
-                                                    Default for judges is the minimum
-                                                    safe envelope.
+                                                <p className="text-[11.5px] text-fg-muted text-right max-w-32">
+                                                    {walletBalanceSol != null
+                                                        ? `Wallet: ${walletBalanceSol.toFixed(3)} SOL`
+                                                        : "Connect to read balance."}
                                                 </p>
                                             </div>
 
@@ -156,8 +170,8 @@ export function DelegationModal({
                                                 type="range"
                                                 min={amountMin}
                                                 max={amountMax}
-                                                step={250}
-                                                value={delegatedAmountUsdc}
+                                                step={0.01}
+                                                value={delegatedAmountSol}
                                                 onChange={(event) =>
                                                     onAmountChange(Number(event.target.value))
                                                 }
@@ -165,14 +179,14 @@ export function DelegationModal({
                                             />
 
                                             <div className="mt-3 flex items-center justify-between text-[11.5px] text-fg-dim">
-                                                <span>{amountMin.toLocaleString()} USDC</span>
-                                                <span>{amountMax.toLocaleString()} USDC</span>
+                                                <span>{amountMin.toFixed(2)} SOL</span>
+                                                <span>{amountMax.toFixed(2)} SOL</span>
                                             </div>
                                         </div>
 
                                         <div className="grid gap-3 sm:grid-cols-2">
-                                            <Metric label="Max loss" value={`${maxLossUsdc.toLocaleString()} USDC`} />
-                                            <Metric label="Max trade" value={`${maxTradeUsdc.toLocaleString()} USDC`} />
+                                            <Metric label="Max loss (policy)" value={`${maxLossSol} SOL`} />
+                                            <Metric label="Max trade (policy)" value={`${maxTradeSol} SOL`} />
                                             <Metric label="Risk" value={estimatedRisk} />
                                             <Metric label="Protocols" value={agent.protocols.length.toString()} />
                                         </div>

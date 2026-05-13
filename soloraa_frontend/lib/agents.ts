@@ -11,6 +11,8 @@
  * previews in the listing grid. They are illustrative, not historical.
  */
 
+import type { StrategyKind } from "./strategies";
+
 export type AgentRisk = "conservative" | "moderate" | "aggressive";
 export type AgentStatus = "live" | "beta" | "preview";
 
@@ -50,6 +52,8 @@ export interface AgentExecutionCopy {
 
 export interface Agent {
     id: string;
+    /** Strategy kind — drives the per-cycle simulation and metric cards. */
+    kind: StrategyKind;
     name: string;
     tagline: string;
     description: string;
@@ -102,6 +106,7 @@ export function legVariables(
 export const AGENTS: Agent[] = [
     {
         id: "market-making-sol-usdc",
+        kind: "market-making",
         name: "Market making",
         tagline: "Maintain bid/ask depth on SOL/USDC under tight inventory caps.",
         description:
@@ -170,6 +175,7 @@ export const AGENTS: Agent[] = [
     },
     {
         id: "treasury-rebalance",
+        kind: "treasury",
         name: "Treasury rebalancing",
         tagline: "Hold a target allocation across SOL, USDC, JTO; rebalance on drift.",
         description:
@@ -238,6 +244,7 @@ export const AGENTS: Agent[] = [
     },
     {
         id: "stablecoin-yield",
+        kind: "yield",
         name: "Stablecoin yield",
         tagline: "Route USDC across attested lending markets, never below floor.",
         description:
@@ -307,6 +314,7 @@ export const AGENTS: Agent[] = [
     },
     {
         id: "dca-allocator",
+        kind: "dca",
         name: "DCA allocator",
         tagline: "Recurring buys with attested price reads and signed intent batching.",
         description:
@@ -374,6 +382,7 @@ export const AGENTS: Agent[] = [
     },
     {
         id: "arbitrage-monitor",
+        kind: "arbitrage",
         name: "Arbitrage monitor",
         tagline: "Triangular monitor across Jupiter routes — execute on attested edge.",
         description:
@@ -442,6 +451,7 @@ export const AGENTS: Agent[] = [
     },
     {
         id: "portfolio-rebalance",
+        kind: "portfolio",
         name: "Portfolio rebalance",
         tagline: "Multi-asset target weights with band-based rebalancing.",
         description:

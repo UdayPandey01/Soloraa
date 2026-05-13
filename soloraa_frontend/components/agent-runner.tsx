@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Keypair, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import { useShallow } from "zustand/react/shallow";
@@ -12,6 +13,9 @@ import {
     ArrowRight,
     Lock,
     ExternalLink,
+    TrendingUp,
+    TrendingDown,
+    Wallet,
 } from "lucide-react";
 import { useExecution, type StageId } from "@/lib/execution-store";
 import { usePortfolio, type PortfolioReceipt } from "@/lib/portfolio-store";
@@ -21,15 +25,22 @@ import { Card, CardBody } from "@/components/ui/card";
 import { PipelineTrack } from "@/components/pipeline-track";
 import { EventFeed } from "@/components/event-feed";
 import { DelegationModal } from "@/components/delegation-modal";
+import { type Agent } from "@/lib/agents";
 import {
-    type Agent,
-    formatUsdc,
-    interpolate,
-    legNotionalUsdc,
-    legVariables,
-} from "@/lib/agents";
-import { sendMemo, shortSig } from "@/lib/devnet-tx";
+    delegateToBurner,
+    sendMemoWithSigner,
+    shortPubkey,
+    shortSig,
+    withdrawFromBurner,
+} from "@/lib/devnet-tx";
 import { CLUSTER } from "@/lib/solora";
+import {
+    getStrategy,
+    SOL_USDC_REF,
+    type MetricCard,
+    type StrategySummary,
+    type Ticker,
+} from "@/lib/strategies";
 
 interface AgentRunnerProps {
     agent: Agent;
@@ -46,26 +57,57 @@ interface DevnetReceipt {
     label: string;
     signature: string;
     explorerUrl: string;
+    /** USDC-equivalent notional flowing through this leg. Display only. */
+    notionalUsdc: number;
+    ts: number;
 }
+
+const DEFAULT_DELEGATION_SOL = 0.1;
+const TX_FEE_LAMPORTS = 5_000;
 
 const newEventId = () =>
     typeof crypto !== "undefined" && "randomUUID" in crypto
         ? crypto.randomUUID()
         : Math.random().toString(36).slice(2);
 
+const STAGE_MS = {
+    intent: 380,
+    policy: 380,
+    oracle: 420,
+    build: 380,
+    sign: 380,
+    broadcast: 360,
+    verify: 380,
+} as const;
+const CYCLE_GAP_MS = 5000;
+
+// ── Component ────────────────────────────────────────────────────────────────
+
 export function AgentRunner({ agent }: AgentRunnerProps) {
     const { connection } = useConnection();
     const wallet = useWallet();
     const { publicKey, connected } = wallet;
     const { setVisible: setWalletModalVisible } = useWalletModal();
-    const { run, start, appendEvent, setStage, succeed, reject, reset } = useExecution(
+    const {
+        run,
+        start,
+        appendEvent,
+        setStage,
+        resetStages,
+        recordSuccess,
+        markRejection,
+        stop,
+        reset,
+    } = useExecution(
         useShallow((s) => ({
             run: s.run,
             start: s.start,
             appendEvent: s.appendEvent,
             setStage: s.setStage,
-            succeed: s.succeed,
-            reject: s.reject,
+            resetStages: s.resetStages,
+            recordSuccess: s.recordSuccess,
+            markRejection: s.markRejection,
+            stop: s.stop,
             reset: s.reset,
         }))
     );
@@ -73,30 +115,69 @@ export function AgentRunner({ agent }: AgentRunnerProps) {
 
     const timeouts = useRef<ReturnType<typeof setTimeout>[]>([]);
     const cancelRef = useRef(false);
+    const loopOwnerRef = useRef(0);
+    const burnerRef = useRef<Keypair | null>(null);
+    const strategy = useMemo(() => getStrategy(agent.kind), [agent.kind]);
+    const strategyStateRef = useRef<unknown>(strategy.init(DEFAULT_DELEGATION_SOL));
+
     const [delegationOpen, setDelegationOpen] = useState(false);
-    const [delegatedAmountUsdc, setDelegatedAmountUsdc] = useState(0);
+    const [delegatedAmountSol, setDelegatedAmountSol] = useState(DEFAULT_DELEGATION_SOL);
+    const [walletBalanceSol, setWalletBalanceSol] = useState<number | null>(null);
     const [approvalStatus, setApprovalStatus] = useState<ApprovalStatus>("idle");
     const [approvalReceipt, setApprovalReceipt] = useState<DevnetReceipt | null>(null);
     const [approvalError, setApprovalError] = useState<string | undefined>();
     const [executionReceipts, setExecutionReceipts] = useState<DevnetReceipt[]>([]);
-    const [utilizedCapital, setUtilizedCapital] = useState(0);
+    const [strategyState, setStrategyState] = useState<unknown>(
+        strategy.init(DEFAULT_DELEGATION_SOL)
+    );
+    const [burnerPubkey, setBurnerPubkey] = useState<string | null>(null);
+    const [sessionBalanceLamports, setSessionBalanceLamports] = useState<number | null>(null);
+    const [withdrawStatus, setWithdrawStatus] = useState<"idle" | "running" | "done" | "failed">("idle");
+    const [withdrawReceipt, setWithdrawReceipt] = useState<DevnetReceipt | null>(null);
 
-    const cancelTimers = useCallback(() => {
-        cancelRef.current = true;
+    // Read the user's wallet balance on connect and after delegations land.
+    const refreshWalletBalance = useCallback(async () => {
+        if (!publicKey) {
+            setWalletBalanceSol(null);
+            return;
+        }
+        try {
+            const lamports = await connection.getBalance(publicKey, "confirmed");
+            setWalletBalanceSol(lamports / LAMPORTS_PER_SOL);
+        } catch {
+            // Soft-fail — UI just shows '—' for the wallet balance.
+        }
+    }, [connection, publicKey]);
+
+    useEffect(() => {
+        void refreshWalletBalance();
+    }, [refreshWalletBalance]);
+
+    // Clamp the chosen amount whenever the wallet balance comes in.
+    useEffect(() => {
+        if (walletBalanceSol == null) return;
+        const ceiling = Math.max(0.01, Math.min(1.0, walletBalanceSol - 0.01));
+        setDelegatedAmountSol((prev) => Math.min(prev, ceiling));
+    }, [walletBalanceSol]);
+
+    const clearTimers = useCallback(() => {
         timeouts.current.forEach(clearTimeout);
         timeouts.current = [];
     }, []);
 
-    const schedule = useCallback((ms: number, fn: () => void) => {
-        timeouts.current.push(
-            setTimeout(() => {
-                if (cancelRef.current) return;
-                fn();
-            }, ms)
-        );
-    }, []);
+    const sleep = useCallback(
+        (ms: number) =>
+            new Promise<void>((resolve) => {
+                const handle = setTimeout(resolve, ms);
+                timeouts.current.push(handle);
+            }),
+        []
+    );
 
-    useEffect(() => () => cancelTimers(), [cancelTimers]);
+    useEffect(() => () => {
+        cancelRef.current = true;
+        clearTimers();
+    }, [clearTimers]);
 
     const ev = useCallback(
         (
@@ -121,233 +202,192 @@ export function AgentRunner({ agent }: AgentRunnerProps) {
     );
 
     /**
-     * Sends a real Memo-program devnet transaction. Used both for the
-     * delegation receipt and for each "agent leg" played out after the mock
-     * pipeline finishes. Returns the receipt or throws on failure.
+     * Continuous agent loop. Cycles the pipeline, simulates a market state,
+     * and broadcasts one real devnet memo per cycle — signed by the session
+     * key, not the user wallet. Runs until the user presses Stop.
      */
-    const broadcastReceipt = useCallback(
-        async (label: string, memo: string): Promise<DevnetReceipt> => {
-            const result = await sendMemo(connection, wallet, memo, CLUSTER);
-            return {
-                label,
-                signature: result.signature,
-                explorerUrl: result.explorerUrl,
-            };
-        },
-        [connection, wallet]
-    );
-
-    /**
-     * Plays the cinematic 7-stage pipeline, then sends N real devnet memo
-     * transactions in sequence so judges see real signatures + explorer links.
-     */
-    const launchRun = useCallback(
-        async (walletPda: string, approval: DevnetReceipt) => {
+    const runContinuousLoop = useCallback(
+        async (walletPda: string, burner: Keypair) => {
+            const loopId = ++loopOwnerRef.current;
             cancelRef.current = false;
-            cancelTimers();
-            cancelRef.current = false;
+            clearTimers();
             setExecutionReceipts([]);
-            setUtilizedCapital(0);
+            const initialState = strategy.init(delegatedAmountSol);
+            strategyStateRef.current = initialState;
+            setStrategyState(initialState);
             start({ walletPda, agentId: agent.id });
 
-            const amountLabel = formatUsdc(delegatedAmountUsdc);
-            const maxLossBps =
-                agent.config.stopLossBpsDefault ||
-                Math.max(60, agent.riskScore * 45);
-            const walletShort = `${walletPda.slice(0, 4)}…${walletPda.slice(-4)}`;
-            const copy = agent.executionCopy;
-            const stageVars = {
-                agentName: agent.name,
-                walletShort,
-                delegated: amountLabel,
-                maxTrade: formatUsdc(agent.config.maxTradeUsdcDefault),
-                maxLossBps,
-            };
+            const isLive = () =>
+                !cancelRef.current && loopId === loopOwnerRef.current;
 
-            schedule(300, () => {
+            let cycleIndex = 0;
+
+            while (isLive()) {
+                const cycleNumber = cycleIndex + 1;
+                const { next, effect } = strategy.tick(
+                    strategyStateRef.current,
+                    cycleIndex
+                );
+
+                strategyStateRef.current = next;
+                setStrategyState(next);
+
+                resetStages();
+
                 setStage("intent", "active");
                 appendEvent(
-                    ev("intent", "Intent received", interpolate(copy.intentDetail, stageVars))
+                    ev(
+                        "intent",
+                        `Cycle #${cycleNumber} · ${effect.label}`,
+                        effect.detail
+                    )
                 );
-            });
-            schedule(1500, () => setStage("intent", "ok"));
+                await sleep(STAGE_MS.intent);
+                if (!isLive()) break;
+                setStage("intent", "ok");
 
-            schedule(1700, () => {
                 setStage("policy", "active");
                 appendEvent(
-                    ev("policy", "Policy evaluated", interpolate(copy.policyDetail, stageVars))
+                    ev(
+                        "policy",
+                        "Policy evaluated",
+                        effect.policyEventDetail ??
+                            `Trade size within policy. Notional ${effect.notionalUsdc.toFixed(0)} USDC.`
+                    )
                 );
-            });
-            schedule(3200, () => setStage("policy", "ok"));
+                await sleep(STAGE_MS.policy);
+                if (!isLive()) break;
+                setStage("policy", "ok");
 
-            schedule(3400, () => {
                 setStage("oracle", "active");
-                appendEvent(ev("oracle", copy.oracleTitle, copy.oracleDetail));
-            });
-            schedule(5200, () => setStage("oracle", "ok"));
+                appendEvent(
+                    ev(
+                        "oracle",
+                        agent.executionCopy.oracleTitle,
+                        effect.oracleEventDetail ??
+                            agent.executionCopy.oracleDetail
+                    )
+                );
+                await sleep(STAGE_MS.oracle);
+                if (!isLive()) break;
+                setStage("oracle", "ok");
 
-            schedule(5400, () => {
                 setStage("build", "active");
                 appendEvent(
                     ev(
                         "build",
                         "Canonical message built",
-                        "169 bytes · SOLORA_INTENT_V2 layout: program_id · wallet · nonce · expiry · blockhash · payload hash.",
+                        "169 bytes · SOLORA_INTENT_V2: program_id · wallet · nonce · expiry · blockhash · payload hash.",
                         {
                             code: "00000000  53 4f 4c 4f 52 41 5f 49 4e 54 45 4e 54 5f 56 32  |SOLORA_INTENT_V2|",
                         }
                     )
                 );
-            });
-            schedule(7000, () => setStage("build", "ok"));
+                await sleep(STAGE_MS.build);
+                if (!isLive()) break;
+                setStage("build", "ok");
 
-            schedule(7200, () => {
                 setStage("sign", "active");
                 appendEvent(
-                    ev("sign", "Enclave signed intent", copy.signDetail, {
-                        code: "ed25519: 7e2c f04b a91d 8e30 c517 6a44 d2b1 90ef …",
-                    })
-                );
-            });
-            schedule(9000, () => setStage("sign", "ok"));
-
-            schedule(9200, () => {
-                setStage("broadcast", "active");
-                appendEvent(
-                    ev("broadcast", "Assembling transaction", copy.broadcastDetail)
-                );
-            });
-            schedule(11000, () => setStage("broadcast", "ok"));
-
-            schedule(11200, () => {
-                setStage("verify", "active");
-                appendEvent(
-                    ev("verify", "On-chain verifier engaged", copy.verifyDetail)
-                );
-            });
-
-            schedule(13000, () => {
-                setStage("verify", "ok");
-                appendEvent(
                     ev(
-                        "verify",
-                        "Pipeline confirmed",
-                        "Mock verifier accepted. Streaming real devnet legs next."
+                        "sign",
+                        "Session key signed intent",
+                        effect.signEventDetail ??
+                            `Devnet stand-in for the attested enclave. Pubkey ${shortPubkey(burner.publicKey.toBase58())} · 64-byte Ed25519 over the canonical bytes.`,
+                        {
+                            code: "ed25519: 7e2c f04b a91d 8e30 c517 6a44 d2b1 90ef …",
+                        }
                     )
                 );
-                void playRealLegs();
-            });
+                await sleep(STAGE_MS.sign);
+                if (!isLive()) break;
+                setStage("sign", "ok");
 
-            const playRealLegs = async () => {
-                const sigs: DevnetReceipt[] = [];
-                const legNotionals: number[] = [];
-                for (let i = 0; i < agent.executionLegs.length; i += 1) {
-                    if (cancelRef.current) return;
-                    const leg = agent.executionLegs[i]!;
-                    const legVars = legVariables(leg, delegatedAmountUsdc);
-                    const legLabel = interpolate(leg.label, legVars);
-                    const notional = legNotionalUsdc(leg, delegatedAmountUsdc);
-                    legNotionals.push(notional);
+                setStage("broadcast", "active");
+                appendEvent(
+                    ev(
+                        "broadcast",
+                        `${effect.label} — broadcasting`,
+                        effect.detail
+                    )
+                );
 
-                    const memo = `SOLORA_EXEC|agent=${agent.id}|leg=${i + 1}|kind=${leg.memoKind}|cap=${delegatedAmountUsdc}|notional=${notional}|ts=${Date.now()}`;
+                const memo = `SOLORA_EXEC|agent=${agent.id}|cycle=${cycleNumber}|kind=${effect.memoKind}|notional=${effect.notionalUsdc.toFixed(2)}|ts=${Date.now()}`;
+                try {
+                    const result = await sendMemoWithSigner(
+                        connection,
+                        burner,
+                        memo,
+                        CLUSTER
+                    );
+                    if (!isLive()) break;
+                    setStage("broadcast", "ok");
+
+                    setStage("verify", "active");
+                    await sleep(STAGE_MS.verify);
+                    if (!isLive()) break;
+                    setStage("verify", "ok");
+
+                    const receipt: DevnetReceipt = {
+                        label: effect.label,
+                        signature: result.signature,
+                        explorerUrl: result.explorerUrl,
+                        notionalUsdc: effect.notionalUsdc,
+                        ts: Date.now(),
+                    };
+                    setExecutionReceipts((prev) => [...prev, receipt]);
+                    setSessionBalanceLamports((prev) =>
+                        prev != null ? Math.max(0, prev - TX_FEE_LAMPORTS) : prev
+                    );
+                    recordSuccess({
+                        txSignature: result.signature,
+                        notionalUsdc: effect.notionalUsdc,
+                    });
+
+                    const realizedSign = effect.realizedDelta >= 0 ? "+" : "−";
+                    appendEvent(
+                        ev(
+                            "verify",
+                            effect.label,
+                            `Confirmed on ${CLUSTER}. Notional ${effect.notionalUsdc.toFixed(2)} USDC · cycle Δ ${realizedSign}${Math.abs(effect.realizedDelta).toFixed(3)} USDC.`,
+                            {
+                                txSignature: result.signature,
+                                explorerUrl: result.explorerUrl,
+                            }
+                        )
+                    );
+                } catch (err) {
+                    if (!isLive()) break;
+                    setStage("broadcast", "rejected");
                     appendEvent(
                         ev(
                             "broadcast",
-                            `Leg ${i + 1}/${agent.executionLegs.length} — broadcasting`,
-                            leg.detail
+                            "Devnet broadcast retry",
+                            err instanceof Error ? err.message : String(err)
                         )
                     );
-                    try {
-                        const receipt = await broadcastReceipt(legLabel, memo);
-                        if (cancelRef.current) return;
-                        sigs.push(receipt);
-                        setExecutionReceipts((prev) => [...prev, receipt]);
-                        setUtilizedCapital((prev) => prev + notional);
-                        appendEvent(
-                            ev(
-                                "verify",
-                                legLabel,
-                                `Confirmed on Solana ${CLUSTER}. Notional ${formatUsdc(notional)} USDC.`,
-                                {
-                                    txSignature: receipt.signature,
-                                    explorerUrl: receipt.explorerUrl,
-                                }
-                            )
-                        );
-                    } catch (err) {
-                        appendEvent(
-                            ev(
-                                "verify",
-                                "Devnet broadcast failed",
-                                err instanceof Error ? err.message : String(err),
-                                { rejected: true }
-                            )
-                        );
-                        reject({
-                            code: -1,
-                            name: "DevnetBroadcastFailed",
-                            description:
-                                err instanceof Error ? err.message : "Devnet RPC refused the leg.",
-                        });
-                        return;
-                    }
+                    // Continue the loop — transient RPC failures shouldn't kill the agent.
                 }
 
-                if (cancelRef.current) return;
-                const finalSig = sigs[sigs.length - 1]?.signature ?? approval.signature;
-                const cumulativeNotional = legNotionals.reduce((a, b) => a + b, 0);
-                appendEvent(
-                    ev(
-                        "verify",
-                        "Run complete",
-                        `${sigs.length} live devnet legs confirmed. Cumulative notional ${formatUsdc(cumulativeNotional)} USDC.`,
-                        { txSignature: finalSig }
-                    )
-                );
-
-                const portfolioReceipts: PortfolioReceipt[] = [
-                    {
-                        label: approval.label,
-                        signature: approval.signature,
-                        explorerUrl: approval.explorerUrl,
-                        notionalUsdc: 0,
-                        ts: Date.now(),
-                    },
-                    ...sigs.map((r, idx) => ({
-                        label: r.label,
-                        signature: r.signature,
-                        explorerUrl: r.explorerUrl,
-                        notionalUsdc: legNotionals[idx] ?? 0,
-                        ts: Date.now(),
-                    })),
-                ];
-                addRunToPortfolio({
-                    id: newEventId(),
-                    walletPubkey: walletPda,
-                    agentId: agent.id,
-                    agentName: agent.name,
-                    delegatedUsdc: delegatedAmountUsdc,
-                    receipts: portfolioReceipts,
-                    startedAt: Date.now() - 13000,
-                    completedAt: Date.now(),
-                });
-
-                succeed(finalSig);
-            };
+                cycleIndex += 1;
+                await sleep(CYCLE_GAP_MS);
+            }
         },
         [
-            addRunToPortfolio,
-            agent,
+            agent.executionCopy.oracleTitle,
+            agent.executionCopy.oracleDetail,
+            agent.id,
             appendEvent,
-            broadcastReceipt,
-            cancelTimers,
-            delegatedAmountUsdc,
+            clearTimers,
+            connection,
+            delegatedAmountSol,
             ev,
-            reject,
-            schedule,
+            recordSuccess,
+            resetStages,
             setStage,
+            sleep,
             start,
-            succeed,
+            strategy,
         ]
     );
 
@@ -361,6 +401,11 @@ export function AgentRunner({ agent }: AgentRunnerProps) {
         setDelegationOpen(true);
     }, [connected, publicKey, setWalletModalVisible]);
 
+    /**
+     * Generates a session keypair, has the user sign ONE devnet SOL transfer
+     * into it, and starts the autonomous loop. After this point no further
+     * user signatures are required — the session key signs every cycle.
+     */
     const approveDelegation = useCallback(async () => {
         if (!publicKey) {
             setWalletModalVisible(true);
@@ -370,145 +415,335 @@ export function AgentRunner({ agent }: AgentRunnerProps) {
         try {
             setApprovalStatus("signing");
             setApprovalError(undefined);
-            const memo =
-                `SOLORA_DELEGATE|agent=${agent.id}|cap=${delegatedAmountUsdc}|wallet=${publicKey.toBase58().slice(0, 12)}|ts=${Date.now()}`;
+            setWithdrawStatus("idle");
+            setWithdrawReceipt(null);
+
+            const burner = Keypair.generate();
+            burnerRef.current = burner;
+            setBurnerPubkey(burner.publicKey.toBase58());
+
             setApprovalStatus("confirming");
-            const receipt = await broadcastReceipt("Delegation approval", memo);
+            const result = await delegateToBurner(
+                connection,
+                wallet,
+                burner.publicKey,
+                delegatedAmountSol,
+                CLUSTER
+            );
+
+            const receipt: DevnetReceipt = {
+                label: `Delegation — ${delegatedAmountSol.toFixed(3)} SOL → session key`,
+                signature: result.signature,
+                explorerUrl: result.explorerUrl,
+                notionalUsdc: Math.round(delegatedAmountSol * SOL_USDC_REF),
+                ts: Date.now(),
+            };
             setApprovalReceipt(receipt);
             setApprovalStatus("confirmed");
             setDelegationOpen(false);
-            await launchRun(publicKey.toBase58(), receipt);
+            setSessionBalanceLamports(
+                Math.floor(delegatedAmountSol * LAMPORTS_PER_SOL)
+            );
+            void refreshWalletBalance();
+            void runContinuousLoop(publicKey.toBase58(), burner);
         } catch (error) {
             setApprovalStatus("failed");
             setApprovalReceipt(null);
+            burnerRef.current = null;
+            setBurnerPubkey(null);
             setApprovalError(
                 error instanceof Error
                     ? error.message
-                    : "The wallet rejected the delegation approval."
+                    : "The wallet rejected the delegation transaction."
             );
         }
     }, [
-        agent.id,
-        broadcastReceipt,
-        delegatedAmountUsdc,
-        launchRun,
+        connection,
+        delegatedAmountSol,
         publicKey,
+        refreshWalletBalance,
+        runContinuousLoop,
         setWalletModalVisible,
+        wallet,
+    ]);
+
+    /**
+     * Drains the session key back to the user wallet. Session key signs the
+     * refund itself — no Phantom popup. Available after Stop.
+     */
+    const withdrawSessionKey = useCallback(async () => {
+        const burner = burnerRef.current;
+        if (!burner || !publicKey) return;
+        try {
+            setWithdrawStatus("running");
+            const result = await withdrawFromBurner(
+                connection,
+                burner,
+                publicKey,
+                CLUSTER
+            );
+            const returnedSol = result.lamportsReturned / LAMPORTS_PER_SOL;
+            const receipt: DevnetReceipt = {
+                label: `Withdrawal — ${returnedSol.toFixed(4)} SOL → wallet`,
+                signature: result.signature,
+                explorerUrl: result.explorerUrl,
+                notionalUsdc: Math.round(returnedSol * SOL_USDC_REF),
+                ts: Date.now(),
+            };
+            setWithdrawReceipt(receipt);
+            setExecutionReceipts((prev) => [...prev, receipt]);
+            setSessionBalanceLamports(TX_FEE_LAMPORTS); // tiny dust left
+            setWithdrawStatus("done");
+            appendEvent(
+                ev(
+                    "verify",
+                    receipt.label,
+                    `Session key signed the refund. ${returnedSol.toFixed(4)} SOL returned to ${shortPubkey(publicKey.toBase58())}.`,
+                    {
+                        txSignature: result.signature,
+                        explorerUrl: result.explorerUrl,
+                    }
+                )
+            );
+            void refreshWalletBalance();
+        } catch (err) {
+            setWithdrawStatus("failed");
+            appendEvent(
+                ev(
+                    "verify",
+                    "Withdrawal failed",
+                    err instanceof Error ? err.message : String(err),
+                    { rejected: true }
+                )
+            );
+        }
+    }, [appendEvent, connection, ev, publicKey, refreshWalletBalance]);
+
+    const stopAgent = useCallback(() => {
+        cancelRef.current = true;
+        clearTimers();
+
+        if (approvalReceipt && executionReceipts.length > 0 && publicKey) {
+            const startedAt = approvalReceipt.ts;
+            const completedAt =
+                executionReceipts[executionReceipts.length - 1]?.ts ?? Date.now();
+            const portfolioReceipts: PortfolioReceipt[] = [
+                {
+                    label: approvalReceipt.label,
+                    signature: approvalReceipt.signature,
+                    explorerUrl: approvalReceipt.explorerUrl,
+                    notionalUsdc: 0,
+                    ts: approvalReceipt.ts,
+                },
+                ...executionReceipts.map((r) => ({
+                    label: r.label,
+                    signature: r.signature,
+                    explorerUrl: r.explorerUrl,
+                    notionalUsdc: r.notionalUsdc,
+                    ts: r.ts,
+                })),
+            ];
+            addRunToPortfolio({
+                id: newEventId(),
+                walletPubkey: publicKey.toBase58(),
+                agentId: agent.id,
+                agentName: agent.name,
+                delegatedUsdc: Math.round(delegatedAmountSol * SOL_USDC_REF),
+                receipts: portfolioReceipts,
+                startedAt,
+                completedAt,
+            });
+        }
+
+        const remaining = sessionBalanceLamports != null
+            ? (sessionBalanceLamports / LAMPORTS_PER_SOL).toFixed(4)
+            : "—";
+        const stopSummary = strategy.summary(
+            strategyStateRef.current,
+            executionReceipts.length
+        );
+        appendEvent(
+            ev(
+                "verify",
+                "Agent stopped",
+                `${stopSummary.pnlLine} Session key still holds ~${remaining} SOL — press Withdraw to refund.`
+            )
+        );
+        stop();
+    }, [
+        addRunToPortfolio,
+        agent.id,
+        agent.name,
+        appendEvent,
+        approvalReceipt,
+        clearTimers,
+        delegatedAmountSol,
+        ev,
+        executionReceipts,
+        publicKey,
+        sessionBalanceLamports,
+        stop,
+        strategy,
     ]);
 
     const runReplay = useCallback(() => {
-        cancelRef.current = false;
-        cancelTimers();
-        cancelRef.current = false;
-
         setStage("broadcast", "active");
-        schedule(220, () => {
+        const t1 = setTimeout(() => {
             appendEvent(
                 ev(
                     "broadcast",
                     "Replay attempt broadcast",
-                    "Same signed bytes resubmitted with a fresh blockhash. Solana SDK-level dedup is dodged; the program is now the gate.",
+                    "Same signed bytes resubmitted with a fresh blockhash. Solana SDK dedup is dodged; the on-chain program is now the gate.",
                     { rejected: true }
                 )
             );
-        });
-        schedule(720, () => {
+        }, 220);
+        const t2 = setTimeout(() => {
             setStage("broadcast", "rejected");
             setStage("verify", "rejected");
             appendEvent(
                 ev(
                     "verify",
                     "IntentNonceMismatch · 6018",
-                    "On-chain verifier compared signed nonce against wallet.nonce. Signed = 0, on-chain = 1. Refused.",
+                    "On-chain verifier compared signed nonce against wallet.nonce. Signed = N, on-chain = N+1. Refused.",
                     { rejected: true }
                 )
             );
-            reject({
+            markRejection({
                 code: 6018,
                 name: "IntentNonceMismatch",
                 description:
                     "Signed intent nonce does not match the on-chain wallet nonce. Replay rejected.",
             });
-        });
-    }, [appendEvent, cancelTimers, ev, reject, schedule, setStage]);
+        }, 720);
+        timeouts.current.push(t1, t2);
+    }, [appendEvent, ev, markRejection, setStage]);
 
     const onReset = () => {
-        cancelTimers();
-        cancelRef.current = false;
+        cancelRef.current = true;
+        clearTimers();
         setApprovalStatus("idle");
         setApprovalReceipt(null);
         setApprovalError(undefined);
         setDelegationOpen(false);
         setExecutionReceipts([]);
-        setUtilizedCapital(0);
-        setDelegatedAmountUsdc(0);
+        setDelegatedAmountSol(DEFAULT_DELEGATION_SOL);
+        const fresh = strategy.init(DEFAULT_DELEGATION_SOL);
+        strategyStateRef.current = fresh;
+        setStrategyState(fresh);
+        burnerRef.current = null;
+        setBurnerPubkey(null);
+        setSessionBalanceLamports(null);
+        setWithdrawStatus("idle");
+        setWithdrawReceipt(null);
         reset();
+        void refreshWalletBalance();
     };
 
-    const isRunning = run?.running ?? false;
-    const hasResult = run && !run.running;
-    const succeeded = hasResult && !!run?.txSignature && !run?.rejection;
-    const vaultStatus = approvalReceipt ? "active · revocable" : "awaiting approval";
-    const delegatedCapital = approvalReceipt ? delegatedAmountUsdc : 0;
-    const availableBalance = approvalReceipt
-        ? Math.max(0, delegatedCapital - utilizedCapital)
-        : 0;
+    const mode = run?.mode ?? "idle";
+    const isRunning = mode === "running";
+    const isStopped = mode === "stopped";
+    const legsConfirmed = run?.legsConfirmed ?? 0;
+    const hasReplayableLeg = legsConfirmed > 0;
+    const cumulativeNotional = run?.cumulativeNotionalUsdc ?? 0;
+
+    const summary: StrategySummary = useMemo(
+        () => strategy.summary(strategyState, legsConfirmed),
+        [strategy, strategyState, legsConfirmed]
+    );
+
     const allReceipts: DevnetReceipt[] = approvalReceipt
         ? [approvalReceipt, ...executionReceipts]
         : executionReceipts;
 
+    const explorerForKey = (pk: string) =>
+        `https://explorer.solana.com/address/${pk}${
+            CLUSTER === "mainnet-beta" ? "" : `?cluster=${CLUSTER}`
+        }`;
+
     return (
         <>
-            <div className="mb-6 grid gap-3 grid-cols-2 xl:grid-cols-4">
+            <div className="mb-4 grid gap-3 grid-cols-2 xl:grid-cols-4">
                 <Card className="border-line-bright/80 bg-bg-surface/45">
                     <CardBody className="p-4">
-                        <p className="text-eyebrow text-fg-dim">Delegated capital</p>
+                        <p className="text-eyebrow text-fg-dim">Delegated</p>
                         <p className="mt-2 mono-num text-[20px] sm:text-[22px] text-fg">
-                            {approvalReceipt ? `${formatUsdc(delegatedCapital)} USDC` : "—"}
+                            {approvalReceipt
+                                ? `${delegatedAmountSol.toFixed(3)} SOL`
+                                : "—"}
                         </p>
-                        <p className="mt-1 text-[12px] text-fg-muted">Bounded vault balance.</p>
+                        <p className="mt-1 text-[12px] text-fg-muted">
+                            {approvalReceipt
+                                ? `≈ ${Math.round(delegatedAmountSol * SOL_USDC_REF)} USDC · sent to session key`
+                                : "Real devnet SOL from your wallet."}
+                        </p>
                     </CardBody>
                 </Card>
                 <Card className="border-line-bright/80 bg-bg-surface/45">
                     <CardBody className="p-4">
-                        <p className="text-eyebrow text-fg-dim">Available</p>
+                        <p className="text-eyebrow text-fg-dim">Session balance</p>
                         <p className="mt-2 mono-num text-[20px] sm:text-[22px] text-fg">
-                            {approvalReceipt ? `${formatUsdc(availableBalance)} USDC` : "—"}
+                            {sessionBalanceLamports != null
+                                ? `${(sessionBalanceLamports / LAMPORTS_PER_SOL).toFixed(4)} SOL`
+                                : "—"}
                         </p>
-                        <p className="mt-1 text-[12px] text-fg-muted">Revocable at any time.</p>
-                    </CardBody>
-                </Card>
-                <Card className="border-line-bright/80 bg-bg-surface/45">
-                    <CardBody className="p-4">
-                        <p className="text-eyebrow text-fg-dim">Utilized</p>
-                        <p className="mt-2 mono-num text-[20px] sm:text-[22px] text-fg">
-                            {approvalReceipt ? `${formatUsdc(utilizedCapital)} USDC` : "—"}
-                        </p>
-                        <p className="mt-1 text-[12px] text-fg-muted">Active exposure under policy.</p>
-                    </CardBody>
-                </Card>
-                <Card className="border-line-bright/80 bg-bg-surface/45">
-                    <CardBody className="p-4">
-                        <p className="text-eyebrow text-fg-dim">Vault status</p>
-                        <p className="mt-2 mono-num text-[14px] sm:text-[15px] text-fg">{vaultStatus}</p>
-                        <p className="mt-1 inline-flex items-center gap-1.5 text-[12px] text-fg-muted">
-                            <Lock className="size-3.5" />
-                            {approvalReceipt ? `Delegation on Solana ${CLUSTER}.` : "Connect to approve."}
+                        <p className="mt-1 text-[12px] text-fg-muted">
+                            {withdrawStatus === "done"
+                                ? "Refunded · session key drained."
+                                : "Session key spends ~0.000005 SOL per cycle."}
                         </p>
                     </CardBody>
                 </Card>
+                <StrategyMetricCard metric={summary.metrics[0]} />
+                <StrategyMetricCard metric={summary.metrics[1]} />
             </div>
+
+            {/* Market state strip */}
+            <div className="mb-3 grid gap-3 sm:grid-cols-4 rounded-xl border border-line bg-bg-surface/30 px-4 py-3">
+                <div className="flex items-center gap-3">
+                    <span className="text-eyebrow text-fg-dim">Wallet</span>
+                    <span className="mono-num text-[15px] text-fg">
+                        {walletBalanceSol != null
+                            ? `${walletBalanceSol.toFixed(3)} SOL`
+                            : "—"}
+                    </span>
+                </div>
+                <StrategyTicker ticker={summary.tickers[0]} />
+                <StrategyTicker ticker={summary.tickers[1]} />
+                <div className="flex items-center gap-3 min-w-0">
+                    <span className="text-eyebrow text-fg-dim shrink-0">Session</span>
+                    {burnerPubkey ? (
+                        <a
+                            href={explorerForKey(burnerPubkey)}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="font-mono text-[12px] text-fg-soft hover:text-fg truncate inline-flex items-center gap-1.5"
+                        >
+                            {shortPubkey(burnerPubkey)}
+                            <ExternalLink className="size-3 shrink-0" />
+                        </a>
+                    ) : (
+                        <span className="text-[12px] text-fg-muted">awaiting delegation</span>
+                    )}
+                </div>
+            </div>
+
+            <p className="mb-6 text-[11.5px] text-fg-muted leading-relaxed">
+                Strategy metrics are <span className="text-fg-soft">simulated</span> — devnet has no liquid markets to realise this strategy on-chain.
+                What <em>is</em> real: the {delegatedAmountSol.toFixed(3)} SOL you delegate to the session key, every cycle's on-chain memo signed by that key,
+                and the withdrawal back to your wallet when you press Stop.
+            </p>
 
             {allReceipts.length > 0 && (
                 <div className="mb-6 rounded-2xl border border-line-bright bg-bg-surface/55 p-4 sm:p-5">
                     <div className="flex flex-wrap items-baseline justify-between gap-2">
                         <p className="text-eyebrow text-fg-dim">Devnet receipts</p>
                         <p className="font-mono text-[11px] text-fg-dim">
-                            {allReceipts.length} confirmed
+                            {allReceipts.length} confirmed{legsConfirmed > 0 ? ` · ${cumulativeNotional.toFixed(0)} USDC notional` : ""}
                         </p>
                     </div>
-                    <ul className="mt-3 grid gap-2">
-                        {allReceipts.map((r) => (
+                    <ul className="mt-3 grid gap-2 max-h-[260px] overflow-y-auto pr-1">
+                        {allReceipts.slice().reverse().map((r) => (
                             <li
                                 key={r.signature}
                                 className="flex items-center justify-between gap-3 rounded-lg border border-line bg-bg-raised/30 px-3 py-2.5"
@@ -537,7 +772,7 @@ export function AgentRunner({ agent }: AgentRunnerProps) {
                 <aside className="rounded-xl border border-line bg-bg-surface/40 p-5 sm:p-6">
                     <div className="mb-5 flex items-center justify-between">
                         <h3 className="text-[13.5px] font-medium text-fg">Execution pipeline</h3>
-                        {run?.rejection ? (
+                        {run?.lastRejection ? (
                             <Badge tone="danger" dotted>
                                 rejected
                             </Badge>
@@ -545,8 +780,8 @@ export function AgentRunner({ agent }: AgentRunnerProps) {
                             <Badge tone="accent" dotted>
                                 running
                             </Badge>
-                        ) : succeeded ? (
-                            <Badge tone="ok">confirmed</Badge>
+                        ) : isStopped ? (
+                            <Badge tone="ok">stopped</Badge>
                         ) : (
                             <Badge>ready</Badge>
                         )}
@@ -554,7 +789,7 @@ export function AgentRunner({ agent }: AgentRunnerProps) {
 
                     <PipelineTrack
                         stages={run?.stages ?? emptyStages}
-                        rejection={run?.rejection}
+                        rejection={run?.lastRejection}
                     />
 
                     <div className="mt-6 grid gap-2 border-t border-line pt-4">
@@ -564,39 +799,65 @@ export function AgentRunner({ agent }: AgentRunnerProps) {
                             </Button>
                         )}
                         {isRunning && (
-                            <Button variant="secondary" onClick={onReset} className="w-full">
-                                <Square className="size-4" /> Cancel
+                            <Button variant="danger" onClick={stopAgent} className="w-full">
+                                <Square className="size-4" /> Stop agent
                             </Button>
                         )}
-                        {succeeded && (
+                        {isStopped && (
                             <>
-                                <Button onClick={runReplay} variant="danger" className="w-full">
-                                    <ShieldCheck className="size-4" /> Simulate replay attack
-                                </Button>
-                                <Button onClick={onReset} variant="secondary" className="w-full">
+                                {withdrawStatus !== "done" && burnerRef.current && (
+                                    <Button
+                                        onClick={() => void withdrawSessionKey()}
+                                        disabled={withdrawStatus === "running"}
+                                        className="w-full"
+                                    >
+                                        <Wallet className="size-4" />
+                                        {withdrawStatus === "running"
+                                            ? "Withdrawing…"
+                                            : withdrawStatus === "failed"
+                                              ? "Retry withdraw"
+                                              : "Withdraw remaining SOL"}
+                                    </Button>
+                                )}
+                                {hasReplayableLeg && (
+                                    <Button
+                                        onClick={runReplay}
+                                        variant="danger"
+                                        className="w-full"
+                                    >
+                                        <ShieldCheck className="size-4" /> Simulate replay attack
+                                    </Button>
+                                )}
+                                <Button
+                                    onClick={onReset}
+                                    variant="secondary"
+                                    className="w-full"
+                                >
                                     <RotateCcw className="size-4" /> Reset
                                 </Button>
                             </>
                         )}
-                        {run?.rejection && (
-                            <Button onClick={onReset} variant="secondary" className="w-full">
-                                <RotateCcw className="size-4" /> Reset
-                            </Button>
-                        )}
                     </div>
 
-                    {run?.txSignature && (
+                    {run?.lastTxSignature && (
                         <a
-                            href={`https://explorer.solana.com/tx/${run.txSignature}${
+                            href={`https://explorer.solana.com/tx/${run.lastTxSignature}${
                                 CLUSTER === "mainnet-beta" ? "" : `?cluster=${CLUSTER}`
                             }`}
                             target="_blank"
                             rel="noreferrer"
                             className="mt-4 inline-flex items-center gap-1.5 text-[12px] text-fg-soft hover:text-fg group"
                         >
-                            view final tx on explorer
+                            view latest tx on explorer
                             <ArrowRight className="size-3 transition-transform group-hover:translate-x-0.5" />
                         </a>
+                    )}
+
+                    {approvalReceipt && (
+                        <p className="mt-4 inline-flex items-center gap-1.5 text-[11.5px] text-fg-muted">
+                            <Lock className="size-3.5" />
+                            User signed once. Session key signs each cycle autonomously.
+                        </p>
                     )}
                 </aside>
 
@@ -614,7 +875,8 @@ export function AgentRunner({ agent }: AgentRunnerProps) {
             <DelegationModal
                 open={delegationOpen}
                 agent={agent}
-                delegatedAmountUsdc={delegatedAmountUsdc}
+                delegatedAmountSol={delegatedAmountSol}
+                walletBalanceSol={walletBalanceSol}
                 approvalStatus={approvalStatus}
                 approvalSignature={approvalReceipt?.signature}
                 approvalExplorerUrl={approvalReceipt?.explorerUrl}
@@ -625,15 +887,64 @@ export function AgentRunner({ agent }: AgentRunnerProps) {
                 onClose={() => setDelegationOpen(false)}
                 onApprove={() => void approveDelegation()}
                 onConnectWallet={() => setWalletModalVisible(true)}
-                onAmountChange={(amount) => {
-                    const clamped = Math.min(
-                        agent.config.capitalUsdcMax,
-                        Math.max(0, amount)
-                    );
-                    setDelegatedAmountUsdc(clamped);
+                onAmountChange={(sol) => {
+                    const ceiling = walletBalanceSol != null
+                        ? Math.max(0.01, Math.min(1.0, walletBalanceSol - 0.01))
+                        : 1.0;
+                    const clamped = Math.min(ceiling, Math.max(0.01, sol));
+                    setDelegatedAmountSol(clamped);
                 }}
             />
         </>
+    );
+}
+
+// ── Strategy-driven subcomponents ────────────────────────────────────────────
+
+function StrategyMetricCard({ metric }: { metric: MetricCard }) {
+    const toneClass =
+        metric.tone === "pos"
+            ? "text-fg"
+            : metric.tone === "neg"
+              ? "text-danger"
+              : "text-fg";
+    const ring = metric.tone === "pos" ? "ring-1 ring-ok/30" : "";
+    return (
+        <Card className={`border-line-bright/80 bg-bg-surface/45 ${ring}`}>
+            <CardBody className="p-4">
+                <p className="text-eyebrow text-fg-dim">{metric.label}</p>
+                <p className={`mt-2 mono-num text-[20px] sm:text-[22px] ${toneClass}`}>
+                    {metric.value}
+                </p>
+                {metric.helper && (
+                    <p className="mt-1 inline-flex items-center gap-1 text-[12px] text-fg-muted">
+                        {metric.tone === "neg" ? (
+                            <TrendingDown className="size-3.5" />
+                        ) : (
+                            <TrendingUp className="size-3.5" />
+                        )}
+                        {metric.helper}
+                    </p>
+                )}
+            </CardBody>
+        </Card>
+    );
+}
+
+function StrategyTicker({ ticker }: { ticker: Ticker }) {
+    const toneClass =
+        ticker.tone === "pos"
+            ? "text-fg"
+            : ticker.tone === "neg"
+              ? "text-danger"
+              : "text-fg";
+    return (
+        <div className="flex items-center gap-3 min-w-0">
+            <span className="text-eyebrow text-fg-dim shrink-0">{ticker.label}</span>
+            <span className={`mono-num text-[14px] truncate ${toneClass}`}>
+                {ticker.value}
+            </span>
+        </div>
     );
 }
 
