@@ -2,8 +2,10 @@ use std::env;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use anyhow::Context;
-use solora_enclave_v2::attestation::Unattested;
+use anyhow::{anyhow, Context};
+use solora_enclave_v2::attestation::{
+    AttestationProvider, MarlinOysterProvider, Unattested,
+};
 use solora_enclave_v2::enclave_key::{EnclaveKey, FileKeyStorage};
 use solora_enclave_v2::pyth::HermesHttpClient;
 use solora_enclave_v2::routes::router;
@@ -48,13 +50,16 @@ async fn main() -> anyhow::Result<()> {
         "FileKeyStorage in use — production deployments MUST swap to a sealed (NSM/Marlin) backend"
     );
 
+    let attestation = build_attestation_provider().await?;
+    info!(backend = attestation.backend_name(), "attestation backend ready");
+
     let state = AppState {
         key,
         program_id,
         rpc: Arc::new(HttpSolanaRpc::new(solana_rpc)),
         hermes: Arc::new(HermesHttpClient::new(hermes_url)),
         guardians: Arc::new(GuardianSet::mainnet_v4()),
-        attestation: Arc::new(Unattested),
+        attestation,
     };
     let app = router(Arc::new(state));
 
@@ -72,4 +77,39 @@ fn decode_program_id(s: &str) -> anyhow::Result<[u8; 32]> {
     let mut out = [0u8; 32];
     out.copy_from_slice(&raw);
     Ok(out)
+}
+
+/// Select the attestation backend from `SOLORA_ATTESTATION_BACKEND`.
+///
+/// Recognised values:
+/// - `unattested` (default) — dev only, every `/attestation` call returns
+///   503. The on-chain governor will refuse to register a wallet against
+///   this backend.
+/// - `marlin-oyster` — production. Calls Marlin Oyster's local attestation
+///   server at `SOLORA_OYSTER_ATTEST_URL` (default `http://127.0.0.1:1300`).
+async fn build_attestation_provider() -> anyhow::Result<Arc<dyn AttestationProvider>> {
+    let backend = env::var("SOLORA_ATTESTATION_BACKEND")
+        .unwrap_or_else(|_| "unattested".to_string());
+    match backend.as_str() {
+        "unattested" => {
+            warn!("SOLORA_ATTESTATION_BACKEND=unattested — DEV ONLY, governor will reject");
+            Ok(Arc::new(Unattested))
+        }
+        "marlin-oyster" => {
+            let url = env::var("SOLORA_OYSTER_ATTEST_URL")
+                .unwrap_or_else(|_| "http://127.0.0.1:1300".to_string());
+            info!(url = %url, "selecting marlin-oyster attestation backend");
+            let provider = MarlinOysterProvider::new(url);
+            // Probe on startup so we fail fast in a misconfigured CVM
+            // instead of erroring on the first /attestation request.
+            provider
+                .probe()
+                .await
+                .context("marlin-oyster attestation server unreachable on startup probe")?;
+            Ok(Arc::new(provider))
+        }
+        other => Err(anyhow!(
+            "unknown SOLORA_ATTESTATION_BACKEND: {other}. Expected 'unattested' or 'marlin-oyster'"
+        )),
+    }
 }

@@ -32,9 +32,13 @@ verification logic without network flakiness.
 - `GET /pubkey` → `{ pubkey_base58, pubkey_hex }`. The relayer uses this to
   sanity-check against `wallet.enclave_signer` before broadcasting.
 - `GET /attestation` → with the default `Unattested` provider, returns `503`
-  with `{"error":"attestation_unavailable"}`. Real Nitro/Marlin builds plug
-  in a provider that returns the COSE/Marlin attestation document binding
-  the enclave's pubkey into `user_data`.
+  with `{"error":"attestation_unavailable"}`. Set
+  `SOLORA_ATTESTATION_BACKEND=marlin-oyster` to switch on the
+  [`MarlinOysterProvider`](./src/attestation/marlin_oyster.rs), which fetches
+  the raw AWS Nitro NSM attestation document from Oyster's local
+  attestation server (default `http://127.0.0.1:1300`) and returns it
+  unchanged. The off-chain governor parses the document and registers
+  PCR0 on-chain. See the top-level [README](../README.md#deploying-to-marlin-oyster).
 - `POST /sign-transfer-intent` → builds + signs a Transfer V2 intent.
 - `POST /sign-trade-intent` → same, but additionally verifies a Pyth Hermes
   accumulator update and runs slippage/policy checks.
