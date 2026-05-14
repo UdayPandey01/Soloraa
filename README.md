@@ -74,7 +74,7 @@ cannot forge, replay, or substitute payloads.
 | `solora_enclave_v2/` | Rust + Axum enclave service. Trait-based I/O, distroless container. Attestation backends: `Unattested` (dev) and `MarlinOysterProvider` (production). See [`solora_enclave_v2/README.md`](./solora_enclave_v2/README.md). |
 | `solora_relayer/` | TypeScript relayer + admin CLI (`ops.ts`). Shared `EnclaveClient` interface for the mock signer and the real HTTP enclave. CBOR attestation parser in `oyster_attestation.ts`. |
 | `packages/soloraa-sdk/` | Published `@soloraaa/sdk` client. Wraps the enclave HTTP API and on-chain `execute_intent` flow. |
-| `soloraa_frontend/` | Next.js reference UI. Connects via the Solana wallet adapter, drives an autonomous agent loop signed by a session key. |
+| `soloraa_frontend/` | Next.js reference UI. Connects via the Solana wallet adapter, runs an autonomous agent loop using a browser-generated **session key** that authorises *intent submissions* — not wallet transfers (see [Security model](#security-model)). |
 | `scripts/` | Bash + PowerShell entry points: `localnet`, `gen_keys`, `gen_idl`, `start_enclave`, `start_relayer`, `deploy_devnet`, `deploy_oyster`. |
 | `docker-compose.yml` | Validator + enclave + relayer with healthchecks. |
 | `docs/operations.md` | Operational runbook — env vars, admin commands, deploy flows. |
@@ -133,23 +133,86 @@ See [`docs/operations.md`](./docs/operations.md) for the full env reference.
 
 ## Security model
 
-The on-chain rules for moving funds out of a `SoloraWallet`:
+Solora separates **agent authorisation** from **fund movement**, with three
+keys at three different trust levels. The same intent never authorises both.
 
-- A transfer is authorised only by an Ed25519 signature from
-  `wallet.enclave_signer` over a domain-separated 169-byte intent binding
-  `(program_id, wallet_pda, nonce, expiry_slot, recent_blockhash,
-  blockhash_slot, kind, payload_hash)`.
-- `wallet.enclave_signer` is rotated via `register_enclave_v2`, which
-  requires the wallet authority's signature plus a governor-signed
-  attestation proof. The proof references a measurement that must be present
-  and active in the on-chain `MeasurementRegistry`.
-- The `MeasurementRegistry` is owned by a governor key. The governor verifies
-  AWS Nitro / Marlin Oyster attestation documents off-chain and signs the
-  resulting `(measurement, enclave_pubkey)` tuple before submitting it.
-- Replay is closed at three independent layers:
-  1. monotonically incrementing `nonce` per wallet,
-  2. explicit `expiry_slot`,
-  3. `recent_blockhash` cross-checked against `SlotHashes` (≈3.5 min window).
+### Three keys, three layers
+
+| Key | Lives in | Authorises | If compromised |
+|---|---|---|---|
+| **Session key** | User's browser, in-memory only. Generated per agent run. | Submitting strategy intents to the enclave. Pays its own tx fees from a bounded SOL grant. | Attacker can ask the enclave to sign intents. Enclave rejects any intent outside the wallet's on-chain policy. **No wallet funds are at risk.** |
+| **Enclave key** | Sealed inside a TEE-attested enclave (Marlin Oyster / AWS Nitro). Never leaves. | Signing 169-byte `SOLORA_INTENT_V2` messages that authorise wallet transfers. | Attacker can sign valid intents. But the on-chain program still enforces nonce / expiry / blockhash / payload-hash / allowlist. Compromised measurements are revoked in the `MeasurementRegistry` and rejected on the next rotation. |
+| **Governor key** | Off-chain. Owns the `MeasurementRegistry`. | Adding / revoking measurements; rotating `wallet.enclave_signer`. | Attacker can register a malicious measurement. **This is the single point of trust** and the next hardening target — multi-sig governor is planned. |
+
+**The session key in the browser is not a hot key for the wallet.** The
+wallet's spending authority is `wallet.enclave_signer`, not the session key.
+The session key only signs *intent requests*, which the enclave is free to
+reject. Demo flows that show "compromised agent → funds safe" are
+demonstrating exactly this layering: an attacker who fully owns the agent
+process (and therefore the session key) still cannot move funds because the
+enclave gates every intent against the on-chain policy.
+
+### On-chain rules
+
+A wallet transfer requires an Ed25519 signature from `wallet.enclave_signer`
+over a domain-separated 169-byte intent binding `(program_id, wallet_pda,
+nonce, expiry_slot, recent_blockhash, blockhash_slot, kind, payload_hash)`.
+
+`wallet.enclave_signer` is rotated via `register_enclave_v2`, which requires:
+
+- the wallet authority's signature, and
+- a governor-signed attestation proof referencing a measurement that is
+  present and active in the on-chain `MeasurementRegistry`.
+
+Replay is closed at three independent layers:
+
+1. monotonically incrementing `nonce` per wallet,
+2. explicit `expiry_slot`,
+3. `recent_blockhash` cross-checked against `SlotHashes` (≈3.5-min window).
+
+### Where trust still concentrates
+
+The threat model leans on two assumptions that are not yet cryptographically
+closed end-to-end:
+
+- **The governor is a single key by default.** Anyone who compromises it can
+  register a forged measurement, which is enough to swap in a malicious
+  enclave on the next rotation. The on-chain program treats `reg.governor`
+  as an opaque `Pubkey`, so this is hardened *without any program change*
+  by pointing it at a Squads multisig vault PDA — see
+  [Hardening the governor](#hardening-the-governor). A native on-chain
+  N-of-M signer set is a planned follow-up.
+- **COSE-Sign1 + AWS Nitro PKI verification** is not yet wired in the
+  governor's off-chain parser (see [Verification surface](#verification-surface)).
+  Until it is, the governor trusts the bytes returned by the attestation
+  URL it queries. A network-path attacker between the governor and a real
+  Oyster CVM can forge measurements that the governor will then sign and
+  register. The Ed25519 governor signature is still the on-chain trust
+  anchor — so this attack reduces to "compromising the governor" — but
+  it visibly enlarges the governor's exposure.
+
+### Hardening the governor
+
+The `MeasurementRegistry.governor` field accepts any Solana `Pubkey`. Two
+practical paths to multisig:
+
+**Today, no program changes — Squads vault PDA as governor.**
+Create a 2-of-3 multisig in [Squads](https://squads.so/) and use its vault
+PDA address as the `--governor` argument to `init-registry`. Any subsequent
+`add_measurement` / `revoke_measurement` / `transfer_governor` /
+`register_enclave_v2` call must be proposed in Squads, signed by the
+required threshold of members, then executed. The on-chain program sees
+the Squads vault PDA as the signer and accepts the call. Use
+`scripts/setup_squads_governor.md` for the step-by-step.
+
+**Planned — native on-chain N-of-M signer set.**
+Replace `governor: Pubkey` in `MeasurementRegistry` with
+`governors: [Pubkey; MAX_GOVERNORS]`, `governor_count: u8`,
+`threshold: u8`. Each mutating instruction iterates
+`ctx.remaining_accounts` and requires `>= threshold` of the registered
+governors to be signers. Tracked as a follow-up because `register_enclave_v2`'s
+attestation-proof verification also needs to accept N Ed25519 signatures
+in the tx, not one — a non-trivial change to `verify_attestation_proof`.
 
 The single source of truth on threats and defences is
 [`docs/trust_model.md`](./docs/trust_model.md).
@@ -301,12 +364,14 @@ governor-side CBOR parser are wired end-to-end; full COSE-Sign1 signature
 verification against the AWS Nitro PKI is the remaining gap before mainnet
 (see [verification surface](#verification-surface) above).
 
-Known design choices not yet implemented:
+Known gaps:
 
-- COSE-Sign1 ECDSA-P384 verification + AWS Nitro cert-chain walk.
-- Governor multisig — the current build uses a single key.
-- Multi-enclave quorum signing — the wallet trusts one attested signer at
-  a time.
+| Gap | Impact | Mitigation today | Permanent fix |
+|---|---|---|---|
+| COSE-Sign1 + AWS Nitro PKI walk | Governor trusts attestation URL bytes. Network-path attacker between governor and a real Oyster CVM could forge measurements. | On-chain governor Ed25519 signature is still the trust anchor — attack reduces to compromising the governor. | Rust verifier module that walks the cert chain and validates ECDSA-P384 over COSE-Sign1. |
+| Native on-chain N-of-M governor | Single-key governor is the strongest concentration of trust. | Point `reg.governor` at a Squads multisig vault PDA — works today, zero program changes. See [setup guide](./scripts/setup_squads_governor.md). | Replace `governor: Pubkey` with `governors[] + threshold` and verify N attestation signatures in `register_enclave_v2`. |
+| Off-chain attestation parser in TypeScript | A security-critical parser sits in the relayer's TS rather than a Rust governor binary. Defensible (shared with `ops.ts`), but uncommon for verifier code. | Parser is small (single CBOR decode + offset arithmetic) and unit-tested. | Port to a Rust `solora_governor` binary alongside the COSE-Sign1 verifier above. |
+| Multi-enclave quorum signing | Wallet trusts one attested signer at a time. | None — single signer by design today. | New ix that verifies N independent Ed25519 sigs from a quorum of registered enclaves over the same intent. |
 
 ## License
 

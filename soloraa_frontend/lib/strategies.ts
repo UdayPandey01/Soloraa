@@ -62,11 +62,32 @@ export interface StrategySummary {
     pnlLine: string;
 }
 
+/**
+ * Live market context passed to each strategy on every cycle. Sourced from
+ * the real Pyth Hermes feed in production. `isLive` is false when the feed
+ * has not delivered an update within its freshness window; strategies and
+ * the runner treat this as a transient pause condition.
+ */
+export interface CycleContext {
+    livePrice: number;
+    confBps: number;
+    publishTimeMs: number;
+    isLive: boolean;
+}
+
 export interface Strategy<S = unknown> {
     kind: StrategyKind;
     init(delegatedSol: number): S;
-    tick(state: S, cycleIndex: number): { next: S; effect: CycleEffect };
-    summary(state: S, legsConfirmed: number): StrategySummary;
+    tick(
+        state: S,
+        cycleIndex: number,
+        ctx: CycleContext
+    ): { next: S; effect: CycleEffect };
+    summary(
+        state: S,
+        legsConfirmed: number,
+        ctx: CycleContext
+    ): StrategySummary;
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -91,7 +112,6 @@ function walk(prev: number, vol: number, lo: number, hi: number): number {
 // ══════════════════════════════════════════════════════════════════════════════
 
 export interface MMState {
-    mid: number;
     inventory: number; // signed SOL
     costBasis: number; // USDC per SOL
     realizedPnl: number; // USDC
@@ -104,17 +124,16 @@ const MM_INVENTORY_THRESHOLD = 0.35;
 export const marketMakingStrategy: Strategy<MMState> = {
     kind: "market-making",
     init: () => ({
-        mid: SOL_USDC_REF,
         inventory: 0,
         costBasis: 0,
         realizedPnl: 0,
         lastAction: "quote",
     }),
 
-    tick(state, _cycleIndex) {
-        const mid = walk(state.mid, 0.4, 140, 145);
+    tick(state, _cycleIndex, ctx) {
+        const mid = ctx.livePrice;
+        const confBps = Math.max(1, Math.round(ctx.confBps));
 
-        // Choose action: trim if too long/short, otherwise mostly quote, sometimes fill.
         let action: "quote" | "fill" | "trim";
         if (Math.abs(state.inventory) >= MM_INVENTORY_THRESHOLD) {
             action = "trim";
@@ -128,14 +147,14 @@ export const marketMakingStrategy: Strategy<MMState> = {
 
         if (action === "quote") {
             return {
-                next: { ...state, mid, lastAction: "quote" },
+                next: { ...state, lastAction: "quote" },
                 effect: {
                     label: `Quote refresh — bid/ask @ ${mid.toFixed(2)}`,
-                    detail: `Symmetric maker quotes ${MM_SPREAD_BPS / 2} bps inside Pyth mid. Inventory ${state.inventory.toFixed(3)} SOL.`,
+                    detail: `Symmetric maker quotes ${MM_SPREAD_BPS / 2} bps inside Pyth mid ${mid.toFixed(2)}. Inventory ${state.inventory.toFixed(3)} SOL.`,
                     memoKind: "mm.quote_refresh",
                     notionalUsdc: 0,
                     realizedDelta: 0,
-                    oracleEventDetail: `Pyth SOL/USDC mid ${mid.toFixed(2)} · conf ${(2 + Math.random() * 3).toFixed(0)} bps · Wormhole 13/19 quorum.`,
+                    oracleEventDetail: `Live Pyth SOL/USDC ${mid.toFixed(2)} · conf ${confBps} bps · published ${Math.round((Date.now() - ctx.publishTimeMs) / 1000)}s ago.`,
                     signEventDetail: `Phoenix place_limit_order intent · symmetric bid/ask.`,
                 },
             };
@@ -162,7 +181,6 @@ export const marketMakingStrategy: Strategy<MMState> = {
 
             return {
                 next: {
-                    mid,
                     inventory: newInv,
                     costBasis: isFinite(newCost) ? newCost : mid,
                     realizedPnl: state.realizedPnl + spreadEarned,
@@ -174,6 +192,7 @@ export const marketMakingStrategy: Strategy<MMState> = {
                     memoKind: "mm.fill",
                     notionalUsdc: sizeSol * mid,
                     realizedDelta: spreadEarned,
+                    oracleEventDetail: `Live Pyth ${mid.toFixed(2)} · conf ${confBps} bps. Fill priced ${MM_SPREAD_BPS / 2} bps inside mid.`,
                     signEventDetail: `Phoenix place_limit_order fill at ${sideLabel} ${fillPrice.toFixed(3)}.`,
                 },
             };
@@ -186,7 +205,6 @@ export const marketMakingStrategy: Strategy<MMState> = {
         const newInv = state.inventory - sign * trimSize;
         return {
             next: {
-                mid,
                 inventory: newInv,
                 costBasis: Math.abs(newInv) < 1e-6 ? 0 : state.costBasis,
                 realizedPnl: state.realizedPnl + realized,
@@ -198,16 +216,18 @@ export const marketMakingStrategy: Strategy<MMState> = {
                 memoKind: "mm.rebalance",
                 notionalUsdc: trimSize * mid,
                 realizedDelta: realized,
+                oracleEventDetail: `Live Pyth ${mid.toFixed(2)} · conf ${confBps} bps · trim mark.`,
                 signEventDetail: `Phoenix CPI · inventory rebalance at mid ${mid.toFixed(2)}.`,
             },
         };
     },
 
-    summary(state, legsConfirmed) {
+    summary(state, legsConfirmed, ctx) {
+        const mid = ctx.isLive ? ctx.livePrice : 0;
         const unrealized =
-            Math.abs(state.inventory) < 1e-6
+            Math.abs(state.inventory) < 1e-6 || !ctx.isLive
                 ? 0
-                : state.inventory * (state.mid - state.costBasis);
+                : state.inventory * (mid - state.costBasis);
         return {
             metrics: [
                 {
@@ -219,17 +239,18 @@ export const marketMakingStrategy: Strategy<MMState> = {
                 {
                     label: "Unrealized P&L",
                     value:
-                        Math.abs(state.inventory) > 1e-6
+                        Math.abs(state.inventory) > 1e-6 && ctx.isLive
                             ? fmtSigned(unrealized, 2, " USDC")
                             : "—",
-                    helper: "mark-to-mid open position",
+                    helper: "mark-to-live-Pyth open position",
                     tone: unrealized >= 0 ? "pos" : "neg",
                 },
             ],
             tickers: [
                 {
-                    label: "Mid",
-                    value: legsConfirmed > 0 ? state.mid.toFixed(2) : "—",
+                    label: "Pyth mid",
+                    value: ctx.isLive ? mid.toFixed(2) : "waiting…",
+                    tone: ctx.isLive ? "neutral" : "neg",
                 },
                 {
                     label: "Inventory",
@@ -250,7 +271,6 @@ export const marketMakingStrategy: Strategy<MMState> = {
 // ══════════════════════════════════════════════════════════════════════════════
 
 export interface DcaState {
-    mid: number;
     /** Cumulative SOL bought across all tranches. */
     cumulativeSol: number;
     /** Cumulative USDC spent. */
@@ -264,20 +284,19 @@ const DCA_TRANCHE_USDC_TARGETS = [12, 18, 24]; // 3 rotating tranche sizes
 export const dcaStrategy: Strategy<DcaState> = {
     kind: "dca",
     init: () => ({
-        mid: SOL_USDC_REF,
         cumulativeSol: 0,
         cumulativeSpent: 0,
         trancheIndex: 0,
     }),
 
-    tick(state, _cycleIndex) {
-        const mid = walk(state.mid, 0.5, 138, 146);
+    tick(state, _cycleIndex, ctx) {
+        const mid = ctx.livePrice;
+        const confBps = Math.max(1, Math.round(ctx.confBps));
         const trancheUsdc = DCA_TRANCHE_USDC_TARGETS[state.trancheIndex]!;
         const solBought = trancheUsdc / mid;
         const nextTrancheIdx = (state.trancheIndex + 1) % DCA_TRANCHE_USDC_TARGETS.length;
         return {
             next: {
-                mid,
                 cumulativeSol: state.cumulativeSol + solBought,
                 cumulativeSpent: state.cumulativeSpent + trancheUsdc,
                 trancheIndex: nextTrancheIdx,
@@ -288,20 +307,21 @@ export const dcaStrategy: Strategy<DcaState> = {
                 memoKind: `dca.tranche_${state.trancheIndex + 1}`,
                 notionalUsdc: trancheUsdc,
                 realizedDelta: 0,
-                oracleEventDetail: `Pyth SOL/USDC mid ${mid.toFixed(2)} · slippage cap 50 bps. Verified before sign.`,
+                oracleEventDetail: `Live Pyth SOL/USDC ${mid.toFixed(2)} · conf ${confBps} bps · slippage cap 50 bps. Verified before sign.`,
                 signEventDetail: `Jupiter v6 shared_accounts_route swap intent for ${trancheUsdc} USDC.`,
                 policyEventDetail: `Tranche ≤ max trade · cadence within schedule · slippage 50 bps ≤ policy.`,
             },
         };
     },
 
-    summary(state, legsConfirmed) {
+    summary(state, legsConfirmed, ctx) {
         const avgCost =
             state.cumulativeSol > 1e-6
                 ? state.cumulativeSpent / state.cumulativeSol
                 : 0;
-        const currentValue = state.cumulativeSol * state.mid;
-        const unrealized = currentValue - state.cumulativeSpent;
+        const mid = ctx.isLive ? ctx.livePrice : 0;
+        const currentValue = state.cumulativeSol * mid;
+        const unrealized = ctx.isLive ? currentValue - state.cumulativeSpent : 0;
         return {
             metrics: [
                 {
@@ -312,15 +332,19 @@ export const dcaStrategy: Strategy<DcaState> = {
                 },
                 {
                     label: "Unrealized P&L",
-                    value: state.cumulativeSol > 1e-6 ? fmtSigned(unrealized, 2, " USDC") : "—",
-                    helper: `mark-to-mid · current ${currentValue.toFixed(0)} USDC`,
+                    value:
+                        state.cumulativeSol > 1e-6 && ctx.isLive
+                            ? fmtSigned(unrealized, 2, " USDC")
+                            : "—",
+                    helper: `mark-to-live-Pyth · current ${currentValue.toFixed(0)} USDC`,
                     tone: unrealized >= 0 ? "pos" : "neg",
                 },
             ],
             tickers: [
                 {
-                    label: "Mid",
-                    value: legsConfirmed > 0 ? state.mid.toFixed(2) : "—",
+                    label: "Pyth mid",
+                    value: ctx.isLive ? mid.toFixed(2) : "waiting…",
+                    tone: ctx.isLive ? "neutral" : "neg",
                 },
                 {
                     label: "Tranches",
@@ -362,7 +386,7 @@ export const yieldStrategy: Strategy<YieldState> = {
         lastAction: "confirm",
     }),
 
-    tick(state, _cycleIndex) {
+    tick(state, _cycleIndex, _ctx) {
         // Drift each venue's APR slightly.
         const nextAprs: Record<Venue, number> = {
             Kamino: clamp(walk(state.venueAprs.Kamino, 0.18, 3.5, 7.5), 3, 8),
@@ -440,7 +464,7 @@ export const yieldStrategy: Strategy<YieldState> = {
         };
     },
 
-    summary(state, legsConfirmed) {
+    summary(state, legsConfirmed, _ctx) {
         const bestVenue = (Object.keys(state.venueAprs) as Venue[]).reduce((a, b) =>
             state.venueAprs[a] > state.venueAprs[b] ? a : b
         );
@@ -498,7 +522,7 @@ export const arbitrageStrategy: Strategy<ArbState> = {
         delegatedUsdc: delegatedSol * SOL_USDC_REF,
     }),
 
-    tick(state, cycleIndex) {
+    tick(state, cycleIndex, _ctx) {
         // Edge bps roughly follows a noisy distribution — sometimes below floor (scan only),
         // sometimes above (execute the loop).
         const edge = clamp(Math.round(Math.random() * 28 + Math.random() * 5 - 5), 0, 32);
@@ -546,7 +570,7 @@ export const arbitrageStrategy: Strategy<ArbState> = {
         };
     },
 
-    summary(state, legsConfirmed) {
+    summary(state, legsConfirmed, _ctx) {
         const avgEdge =
             state.loopsExecuted > 0
                 ? state.totalCapturedUsdc / state.loopsExecuted
@@ -614,7 +638,7 @@ export const treasuryStrategy: Strategy<TreasuryState> = {
         lastAction: "settle",
     }),
 
-    tick(state, _cycleIndex) {
+    tick(state, _cycleIndex, _ctx) {
         // Drift weights slightly each cycle.
         const drift = (asset: TreasuryAsset) =>
             clamp(state.weights[asset] + (Math.random() - 0.5) * 0.04, 0.05, 0.85);
@@ -728,7 +752,7 @@ export const treasuryStrategy: Strategy<TreasuryState> = {
         };
     },
 
-    summary(state, legsConfirmed) {
+    summary(state, legsConfirmed, _ctx) {
         const maxDriftAsset = (Object.keys(state.weights) as TreasuryAsset[]).reduce(
             (a, b) =>
                 Math.abs(state.weights[a] - state.targets[a]) >
@@ -806,7 +830,7 @@ export const portfolioStrategy: Strategy<PortfolioState> = {
         lastDriftedAsset: "SOL",
     }),
 
-    tick(state, _cycleIndex) {
+    tick(state, _cycleIndex, _ctx) {
         // Drift weights.
         const drifted: Record<PortfolioAsset, number> = {
             SOL: clamp(state.weights.SOL + (Math.random() - 0.5) * 0.03, 0.05, 0.7),
@@ -902,7 +926,7 @@ export const portfolioStrategy: Strategy<PortfolioState> = {
         };
     },
 
-    summary(state, legsConfirmed) {
+    summary(state, legsConfirmed, _ctx) {
         const assets: PortfolioAsset[] = ["SOL", "USDC", "JTO", "JUP", "WBTC"];
         const maxDriftAsset = assets.reduce((a, b) =>
             Math.abs(state.weights[a] - state.targets[a]) >

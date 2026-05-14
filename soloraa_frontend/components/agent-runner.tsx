@@ -37,10 +37,12 @@ import { CLUSTER } from "@/lib/solora";
 import {
     getStrategy,
     SOL_USDC_REF,
+    type CycleContext,
     type MetricCard,
     type StrategySummary,
     type Ticker,
 } from "@/lib/strategies";
+import { usePythPrice } from "@/lib/pyth-feed";
 
 interface AgentRunnerProps {
     agent: Agent;
@@ -119,6 +121,23 @@ export function AgentRunner({ agent }: AgentRunnerProps) {
     const burnerRef = useRef<Keypair | null>(null);
     const strategy = useMemo(() => getStrategy(agent.kind), [agent.kind]);
     const strategyStateRef = useRef<unknown>(strategy.init(DEFAULT_DELEGATION_SOL));
+
+    // Live Pyth SOL/USDC feed. Drives every strategy that prices in SOL.
+    const pyth = usePythPrice();
+    const pythCtxRef = useRef<CycleContext>({
+        livePrice: SOL_USDC_REF,
+        confBps: 0,
+        publishTimeMs: 0,
+        isLive: false,
+    });
+    useEffect(() => {
+        pythCtxRef.current = {
+            livePrice: pyth.price ?? SOL_USDC_REF,
+            confBps: pyth.confBps ?? 0,
+            publishTimeMs: pyth.publishTimeMs ?? 0,
+            isLive: pyth.isLive && pyth.price != null,
+        };
+    }, [pyth.price, pyth.confBps, pyth.publishTimeMs, pyth.isLive]);
 
     const [delegationOpen, setDelegationOpen] = useState(false);
     const [delegatedAmountSol, setDelegatedAmountSol] = useState(DEFAULT_DELEGATION_SOL);
@@ -224,9 +243,26 @@ export function AgentRunner({ agent }: AgentRunnerProps) {
 
             while (isLive()) {
                 const cycleNumber = cycleIndex + 1;
+
+                // Block the cycle if Pyth hasn't delivered a fresh update.
+                // The agent is supposed to refuse signing on stale oracle
+                // data — that's the whole point of the policy gate.
+                if (!pythCtxRef.current.isLive) {
+                    appendEvent(
+                        ev(
+                            "policy",
+                            `Cycle #${cycleNumber} · paused — oracle stale`,
+                            "Pyth Hermes feed has not delivered an update within the freshness window. Waiting for live mid before signing."
+                        )
+                    );
+                    await sleep(2_000);
+                    continue;
+                }
+
                 const { next, effect } = strategy.tick(
                     strategyStateRef.current,
-                    cycleIndex
+                    cycleIndex,
+                    pythCtxRef.current
                 );
 
                 strategyStateRef.current = next;
@@ -560,7 +596,8 @@ export function AgentRunner({ agent }: AgentRunnerProps) {
             : "—";
         const stopSummary = strategy.summary(
             strategyStateRef.current,
-            executionReceipts.length
+            executionReceipts.length,
+            pythCtxRef.current
         );
         appendEvent(
             ev(
@@ -647,9 +684,19 @@ export function AgentRunner({ agent }: AgentRunnerProps) {
     const hasReplayableLeg = legsConfirmed > 0;
     const cumulativeNotional = run?.cumulativeNotionalUsdc ?? 0;
 
+    const liveCtx: CycleContext = useMemo(
+        () => ({
+            livePrice: pyth.price ?? SOL_USDC_REF,
+            confBps: pyth.confBps ?? 0,
+            publishTimeMs: pyth.publishTimeMs ?? 0,
+            isLive: pyth.isLive && pyth.price != null,
+        }),
+        [pyth.price, pyth.confBps, pyth.publishTimeMs, pyth.isLive]
+    );
+
     const summary: StrategySummary = useMemo(
-        () => strategy.summary(strategyState, legsConfirmed),
-        [strategy, strategyState, legsConfirmed]
+        () => strategy.summary(strategyState, legsConfirmed, liveCtx),
+        [strategy, strategyState, legsConfirmed, liveCtx]
     );
 
     const allReceipts: DevnetReceipt[] = approvalReceipt
@@ -728,9 +775,41 @@ export function AgentRunner({ agent }: AgentRunnerProps) {
                 </div>
             </div>
 
+            {/* Live Pyth banner */}
+            <div className="mb-3 flex flex-wrap items-center gap-3 rounded-xl border border-line bg-bg-surface/30 px-4 py-2.5">
+                <span
+                    className={`inline-flex size-1.5 rounded-full ${
+                        pyth.isLive ? "bg-ok" : "bg-danger"
+                    }`}
+                />
+                <span className="text-eyebrow text-fg-dim">Pyth Hermes</span>
+                <span className="mono-num text-[13px] text-fg">
+                    {pyth.price != null
+                        ? `SOL/USDC ${pyth.price.toFixed(2)}`
+                        : "subscribing…"}
+                </span>
+                {pyth.confBps != null && pyth.isLive && (
+                    <span className="text-[11.5px] text-fg-muted">
+                        ±{pyth.confBps.toFixed(0)} bps · {Math.max(
+                            0,
+                            Math.round((Date.now() - (pyth.publishTimeMs ?? 0)) / 1000)
+                        )}s ago
+                    </span>
+                )}
+                <span className="ml-auto font-mono text-[10.5px] text-fg-dim truncate hidden sm:inline">
+                    {pyth.source}
+                </span>
+            </div>
+
             <p className="mb-6 text-[11.5px] text-fg-muted leading-relaxed">
-                Strategy metrics are <span className="text-fg-soft">simulated</span> — devnet has no liquid markets to realise this strategy on-chain.
-                What <em>is</em> real: the {delegatedAmountSol.toFixed(3)} SOL you delegate to the session key, every cycle's on-chain memo signed by that key,
+                <span className="text-fg-soft">Price input is live</span> from
+                Pyth Hermes mainnet — the mid above drives every cycle's
+                quote, fill, and rebalance decision.{" "}
+                <span className="text-fg-soft">P&L is still simulated</span>{" "}
+                until the enclave wires real Phoenix / Jupiter execution on
+                mainnet. What <em>is</em> real today: the{" "}
+                {delegatedAmountSol.toFixed(3)} SOL you delegate to the
+                session key, every cycle's on-chain memo signed by that key,
                 and the withdrawal back to your wallet when you press Stop.
             </p>
 
