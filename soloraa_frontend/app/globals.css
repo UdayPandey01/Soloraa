@@ -277,6 +277,7 @@ body {
         cursor: none !important;
     }
 }
+
 .cursor-dot,
 .cursor-ring {
     position: fixed;

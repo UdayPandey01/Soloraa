@@ -242,7 +242,7 @@ function Hero() {
     return (
         <section
             ref={ref}
-            className="relative min-h-screen flex items-center justify-center overflow-hidden grain bg-ink"
+            className="relative -mt-20 pt-20 min-h-screen flex items-center justify-center overflow-hidden grain bg-ink"
         >
             <div className="landing-mesh" aria-hidden>
                 <span
@@ -343,10 +343,10 @@ function Hero() {
                             transition={{ delay: 0.85, duration: 0.7 }}
                             className="mt-9 flex flex-wrap items-center gap-3"
                         >
-                            <MagneticLink href="/agents" primary>
+                            <MagneticLink href="/agents" primary cursorText="run agent">
                                 Run an agent <ArrowRight className="size-4" />
                             </MagneticLink>
-                            <MagneticLink href="/developers">
+                            <MagneticLink href="/developers" cursorText="read sdk">
                                 Read the architecture
                             </MagneticLink>
                         </motion.div>
@@ -423,7 +423,7 @@ function ProblemAct() {
                     <p className="text-[17px] leading-[1.65] text-cream-soft max-w-xl">
                         Session keys. SDK guards. Middleware allowlists. Every "agent wallet"
                         on the market enforces its rules <em>inside the process that holds
-                        the private key</em>. If the model is jailbroken, prompt-injected,
+                            the private key</em>. If the model is jailbroken, prompt-injected,
                         or simply wrong, the wallet drains. That isn't a security boundary —
                         it's a code review under load.
                     </p>
@@ -550,6 +550,7 @@ function AgentsTeaser() {
                     <Link
                         href="/agents"
                         data-cursor="link"
+                        data-cursor-text="all agents"
                         className="group inline-flex items-center gap-2 text-cream-soft hover:text-cream transition-colors"
                     >
                         All agents{" "}
@@ -563,6 +564,7 @@ function AgentsTeaser() {
                             href={{ pathname: `/agent/${agent.id}` }}
                             key={agent.id}
                             data-cursor="link"
+                            data-cursor-text={`run · ${agent.name.toLowerCase()}`}
                             className="group relative block rounded-2xl border border-cream/12 bg-cream/[0.02] p-5 hover:bg-cream/[0.04] hover:border-coral/40 transition-all duration-500"
                             style={{ transitionDelay: `${i * 40}ms` }}
                         >
@@ -607,10 +609,10 @@ function ClosingCTA() {
                     <em className="italic text-coral">Not a key.</em>
                 </h2>
                 <div className="mt-12 flex flex-wrap items-center justify-center gap-3">
-                    <MagneticLink href="/agents" primary>
+                    <MagneticLink href="/agents" primary cursorText="run agent">
                         Run your first agent <ArrowRight className="size-4" />
                     </MagneticLink>
-                    <MagneticLink href="/developers">
+                    <MagneticLink href="/developers" cursorText="read sdk">
                         Drop in the SDK
                     </MagneticLink>
                 </div>
@@ -626,10 +628,12 @@ function ClosingCTA() {
 function MagneticLink({
     href,
     primary,
+    cursorText,
     children,
 }: {
     href: string;
     primary?: boolean;
+    cursorText?: string;
     children: React.ReactNode;
 }) {
     const ref = useRef<HTMLAnchorElement>(null);
@@ -662,6 +666,7 @@ function MagneticLink({
             ref={ref}
             href={{ pathname: href }}
             data-cursor="link"
+            data-cursor-text={cursorText ?? (primary ? "run" : "open")}
             className={
                 "magnet inline-flex items-center gap-2 rounded-full px-6 py-3 text-[14px] font-medium transition-colors " +
                 (primary
