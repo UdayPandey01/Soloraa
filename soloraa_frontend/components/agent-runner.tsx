@@ -51,16 +51,17 @@ export function AgentRunner({ agent }: AgentRunnerProps) {
     const { setVisible: setWalletModalVisible } = useWalletModal();
 
     const {
-        run,
-        burnerPubkey,
+        storeRun,
+        storeBurnerPubkey,
         delegatedSol,
-        sessionBalanceLamports,
-        approvalReceipt,
+        storeSessionBalanceLamports,
+        storeApprovalReceipt,
         approvalStatus,
         approvalError,
-        executionReceipts,
-        withdrawStatus,
+        storeExecutionReceipts,
+        storeWithdrawStatus,
         strategyState,
+        strategyKind,
         startAgent,
         stopAgent,
         withdrawSessionKey,
@@ -70,16 +71,17 @@ export function AgentRunner({ agent }: AgentRunnerProps) {
         setApprovalError,
     } = useExecution(
         useShallow((s) => ({
-            run: s.run,
-            burnerPubkey: s.burnerPubkey,
+            storeRun: s.run,
+            storeBurnerPubkey: s.burnerPubkey,
             delegatedSol: s.delegatedSol,
-            sessionBalanceLamports: s.sessionBalanceLamports,
-            approvalReceipt: s.approvalReceipt,
+            storeSessionBalanceLamports: s.sessionBalanceLamports,
+            storeApprovalReceipt: s.approvalReceipt,
             approvalStatus: s.approvalStatus,
             approvalError: s.approvalError,
-            executionReceipts: s.executionReceipts,
-            withdrawStatus: s.withdrawStatus,
+            storeExecutionReceipts: s.executionReceipts,
+            storeWithdrawStatus: s.withdrawStatus,
             strategyState: s.strategyState,
+            strategyKind: s.strategyKind,
             startAgent: s.startAgent,
             stopAgent: s.stopAgent,
             withdrawSessionKey: s.withdrawSessionKey,
@@ -91,6 +93,14 @@ export function AgentRunner({ agent }: AgentRunnerProps) {
     );
 
     const strategy = useMemo(() => getStrategy(agent.kind), [agent.kind]);
+
+    const isOurRun = storeRun?.agentId === agent.id;
+    const run = isOurRun ? storeRun : null;
+    const burnerPubkey = isOurRun ? storeBurnerPubkey : null;
+    const sessionBalanceLamports = isOurRun ? storeSessionBalanceLamports : null;
+    const approvalReceipt = isOurRun ? storeApprovalReceipt : null;
+    const executionReceipts = isOurRun ? storeExecutionReceipts : [];
+    const withdrawStatus = isOurRun ? storeWithdrawStatus : "idle";
 
     const [delegationOpen, setDelegationOpen] = useState(false);
     const [walletBalanceSol, setWalletBalanceSol] = useState<number | null>(null);
@@ -142,9 +152,19 @@ export function AgentRunner({ agent }: AgentRunnerProps) {
 
     const summary: StrategySummary = useMemo(() => {
         const state =
-            strategyState ?? strategy.init(delegatedSol);
+            strategyState != null && strategyKind === agent.kind
+                ? strategyState
+                : strategy.init(delegatedSol);
         return strategy.summary(state, legsConfirmed, liveCtx);
-    }, [strategy, strategyState, legsConfirmed, liveCtx, delegatedSol]);
+    }, [
+        strategy,
+        strategyState,
+        strategyKind,
+        agent.kind,
+        legsConfirmed,
+        liveCtx,
+        delegatedSol,
+    ]);
 
     const allReceipts: DevnetReceipt[] = approvalReceipt
         ? [approvalReceipt, ...executionReceipts]
