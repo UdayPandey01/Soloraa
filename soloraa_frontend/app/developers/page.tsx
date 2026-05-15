@@ -1,44 +1,66 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, Box, Cpu, Webhook } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardBody } from "@/components/ui/card";
 import { CodeBlock, InlineCode } from "@/components/ui/code";
 
 export const metadata: Metadata = {
     title: "Developers",
     description:
-        "Build autonomous agents on Soloraa. The @soloraa/sdk handles intent shaping, enclave dispatch, and signed-intent broadcasting.",
+        "Build autonomous agents on Soloraa. The @soloraaa/sdk handles intent shaping, enclave dispatch, and signed-intent broadcasting.",
 };
 
 export default function DevelopersPage() {
     return (
         <div className="mx-auto max-w-7xl px-4 sm:px-6 pt-12 sm:pt-16 pb-20 sm:pb-24 lg:pt-20">
             <header className="max-w-3xl">
-                <Badge>Developer platform</Badge>
-                <h1 className="mt-5 text-display-2 text-fg text-balance">
-                    Any agent that can describe an intent can run on Soloraa.
-                </h1>
-                <p className="mt-5 text-[17px] leading-[1.55] text-fg-muted">
-                    The built-in agents are not a closed set. The{" "}
-                    <InlineCode>@soloraa/sdk</InlineCode> exposes the same primitives the
-                    catalog uses — describe an action, the enclave signs only what your
-                    policy allows, the chain verifies before funds move.
+                <p className="font-mono text-[11px] tracking-[0.32em] uppercase text-fg-dim">
+                    SDK · v0.2.0 · published
                 </p>
+                <h1
+                    className="mt-5 text-[clamp(40px,7vw,84px)] leading-[0.98] tracking-tight text-fg"
+                    style={{ fontFamily: "var(--font-display)" }}
+                >
+                    Any agent that can{" "}
+                    <em className="italic text-fg-soft">describe an intent</em>{" "}
+                    can run on Soloraa.
+                </h1>
+                <p className="mt-6 text-[16px] sm:text-[17px] leading-[1.6] text-fg-muted">
+                    The built-in agents are not a closed set.{" "}
+                    <InlineCode>@soloraaa/sdk</InlineCode> exposes the same primitives
+                    the catalogue uses — describe an action, the enclave signs only what
+                    your policy allows, the chain verifies before funds move.
+                </p>
+
+                {/* v0.2 callout */}
+                <div className="mt-8 rounded-2xl border border-line-bright bg-bg-surface/50 p-5 sm:p-6">
+                    <p className="font-mono text-[10.5px] tracking-[0.32em] uppercase text-fg-dim">
+                        new in 0.2
+                    </p>
+                    <p className="mt-3 text-[14.5px] leading-[1.6] text-fg-soft">
+                        Real <code className="font-mono text-fg">Ed25519</code>{" "}
+                        verification via <code className="font-mono text-fg">@noble/ed25519</code>{" "}
+                        — <em className="italic">no more stubbed verifyIntent</em>. Every
+                        on-chain rejection now carries a <code className="font-mono text-fg">docUrl</code>{" "}
+                        pointing at the matching error page, so consumers don't have to
+                        grep the source to know what went wrong.
+                    </p>
+                </div>
+
                 <div className="mt-8 flex flex-wrap gap-3">
                     <Link
                         href="/docs"
-                        className="inline-flex items-center gap-2 rounded-md h-11 px-5 text-[14px] font-medium bg-fg text-bg hover:opacity-90"
+                        className="inline-flex items-center gap-2 rounded-full h-11 px-5 text-[14px] font-medium bg-fg text-bg hover:opacity-90 transition-opacity"
                     >
                         Read the docs <ArrowRight className="size-4" />
                     </Link>
                     <a
-                        href="https://github.com"
+                        href="https://www.npmjs.com/package/@soloraaa/sdk"
                         target="_blank"
                         rel="noreferrer"
-                        className="inline-flex items-center gap-2 rounded-md h-11 px-5 text-[14px] font-medium bg-bg-surface text-fg border border-line-bright hover:border-fg-dim"
+                        className="inline-flex items-center gap-2 rounded-full h-11 px-5 text-[14px] font-medium bg-bg-surface text-fg border border-line-bright hover:border-fg-dim transition-colors"
                     >
-                        SDK source
+                        @soloraaa/sdk on npm
                     </a>
                 </div>
             </header>
@@ -47,9 +69,9 @@ export default function DevelopersPage() {
                 <h2 className="text-eyebrow text-fg-dim">Install</h2>
                 <div className="mt-3">
                     <CodeBlock title="install" language="bash">
-{`npm install @soloraa/sdk
+{`npm install @soloraaa/sdk
 # or
-pnpm add @soloraa/sdk`}
+pnpm add @soloraaa/sdk`}
                     </CodeBlock>
                 </div>
             </section>
@@ -63,7 +85,7 @@ pnpm add @soloraa/sdk`}
                 </p>
                 <div className="mt-5">
                     <CodeBlock title="examples/swap.ts" language="ts">
-{`import { SoloraaClient } from "@soloraa/sdk";
+{`import { SoloraaClient } from "@soloraaa/sdk";
 
 const client = new SoloraaClient({
     rpcUrl: process.env.SOLANA_RPC_URL!,

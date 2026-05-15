@@ -9,9 +9,15 @@ export function Footer() {
                 <div className="grid gap-8 sm:grid-cols-2 md:grid-cols-[1.4fr_1fr_1fr_1fr]">
                     <div>
                         <p className="text-sm text-fg leading-relaxed max-w-sm">
-                            Soloraa is the cryptographic execution layer for autonomous
-                            AI agents on Solana. Funds move only when an attested enclave
-                            signs an intent that the chain independently re-verifies.
+                            Soloraa is the cryptographic execution layer for{" "}
+                            <em
+                                className="italic"
+                                style={{ fontFamily: "var(--font-display)" }}
+                            >
+                                autonomous AI
+                            </em>{" "}
+                            on Solana. Funds move only when an attested enclave signs an
+                            intent the chain independently re-verifies.
                         </p>
                         <p className="mt-3 font-mono text-[11px] text-fg-dim">
                             program {PROGRAM_ID.slice(0, 8)}…{PROGRAM_ID.slice(-6)} · {CLUSTER}

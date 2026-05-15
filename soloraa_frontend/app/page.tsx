@@ -158,7 +158,7 @@ function Hero() {
                 poster="/obsidian.png"
                 className="hidden md:block absolute inset-0 w-full h-full object-cover opacity-55 pointer-events-none"
                 style={{
-                    transform: "scale(1.08) translateY(-1.8%)",
+                    transform: "scale(1.08) translate(2.5%, 3%)",
                     transformOrigin: "center center",
                 }}
             >
@@ -169,7 +169,7 @@ function Hero() {
                 alt=""
                 className="md:hidden absolute inset-0 w-full h-full object-cover opacity-55 pointer-events-none"
                 style={{
-                    transform: "scale(1.06)",
+                    transform: "scale(1.06) translate(2.5%, 3%)",
                     transformOrigin: "center center",
                 }}
             />

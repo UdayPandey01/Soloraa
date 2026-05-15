@@ -43,9 +43,11 @@ export function Nav() {
             <div className="mx-auto max-w-7xl px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
                 <Link href="/" className="flex items-center gap-2.5 group">
                     <Logo />
-                    <span className="text-sm font-medium tracking-tight">Soloraa</span>
+                    <span className="text-[15px] tracking-tight">
+                        Solor<em className="font-serif italic" style={{ fontFamily: "var(--font-display)" }}>a</em>
+                    </span>
                     <span className="hidden sm:inline-flex text-[10px] font-mono uppercase tracking-widest text-fg-dim ml-1">
-                        v0.1
+                        sdk v0.2
                     </span>
                 </Link>
 
