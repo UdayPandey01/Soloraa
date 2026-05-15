@@ -27,6 +27,7 @@ import {
     usePortfolio,
     type PortfolioRun,
 } from "@/lib/portfolio-store";
+import { useExecution } from "@/lib/execution-store";
 import { shortSig } from "@/lib/devnet-tx";
 
 interface RecentTx {
@@ -42,6 +43,7 @@ export default function PortfolioPage() {
     const { setVisible: setWalletModalVisible } = useWalletModal();
     const allRuns = usePortfolio((s) => s.runs);
     const clearForWallet = usePortfolio((s) => s.clearForWallet);
+    const liveRun = useExecution((s) => s.run);
 
     const [hydrated, setHydrated] = useState(false);
     const [balanceSol, setBalanceSol] = useState<number | null>(null);
@@ -213,6 +215,49 @@ export default function PortfolioPage() {
                     />
                 </div>
             </header>
+
+            {liveRun?.mode === "running" && (() => {
+                const liveAgent = AGENTS.find((a) => a.id === liveRun.agentId);
+                return (
+                    <Link
+                        href={
+                            liveAgent
+                                ? { pathname: `/agent/${liveAgent.id}` }
+                                : { pathname: "/agents" }
+                        }
+                        className="relative mt-8 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-accent/40 bg-accent/[0.06] p-5 hover:bg-accent/[0.10] transition-colors group"
+                    >
+                        <div className="flex items-center gap-4">
+                            <span className="relative inline-flex size-2.5">
+                                <span
+                                    className="absolute inset-0 rounded-full animate-ping"
+                                    style={{ background: "hsl(var(--accent) / 0.6)" }}
+                                />
+                                <span
+                                    className="relative inline-flex size-2.5 rounded-full"
+                                    style={{ background: "hsl(var(--accent))" }}
+                                />
+                            </span>
+                            <div>
+                                <p className="font-mono text-[10.5px] tracking-[0.28em] uppercase text-fg-dim">
+                                    Live · running now
+                                </p>
+                                <p className="mt-1 text-[15px] sm:text-[16px] text-fg">
+                                    <span className="font-medium">
+                                        {liveAgent?.name ?? liveRun.agentId}
+                                    </span>{" "}
+                                    <span className="text-fg-muted">
+                                        · {liveRun.legsConfirmed} legs · {formatUsdc(liveRun.cumulativeNotionalUsdc)} USDC notional
+                                    </span>
+                                </p>
+                            </div>
+                        </div>
+                        <span className="inline-flex items-center gap-1.5 text-[13px] text-fg-soft group-hover:text-fg transition-colors">
+                            Open agent <ArrowUpRight className="size-3.5" />
+                        </span>
+                    </Link>
+                );
+            })()}
 
             <section className="mt-10 sm:mt-12">
                 <header className="mb-5 flex items-baseline justify-between gap-3">

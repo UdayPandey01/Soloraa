@@ -38,6 +38,10 @@ body {
     text-rendering: optimizeLegibility;
 }
 
+body:has(.landing) {
+    background: hsl(240 8% 4%);
+}
+
 body {
     min-height: 100vh;
 }

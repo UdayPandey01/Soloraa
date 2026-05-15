@@ -111,12 +111,15 @@ export function AgentRunner({ agent }: AgentRunnerProps) {
             reset: s.reset,
         }))
     );
-    const addRunToPortfolio = usePortfolio((s) => s.addRun);
+    const upsertRunToPortfolio = usePortfolio((s) => s.upsertRun);
 
     const timeouts = useRef<ReturnType<typeof setTimeout>[]>([]);
     const cancelRef = useRef(false);
     const loopOwnerRef = useRef(0);
     const burnerRef = useRef<Keypair | null>(null);
+    const runIdRef = useRef<string | null>(null);
+    const runStartedAtRef = useRef<number>(0);
+    const approvalReceiptRef = useRef<DevnetReceipt | null>(null);
     const strategy = useMemo(() => getStrategy(agent.kind), [agent.kind]);
     const strategyStateRef = useRef<unknown>(strategy.init(DEFAULT_DELEGATION_SOL));
 
@@ -357,7 +360,44 @@ export function AgentRunner({ agent }: AgentRunnerProps) {
                         notionalUsdc: effect.notionalUsdc,
                         ts: Date.now(),
                     };
-                    setExecutionReceipts((prev) => [...prev, receipt]);
+                    setExecutionReceipts((prev) => {
+                        const nextReceipts = [...prev, receipt];
+                        if (
+                            runIdRef.current &&
+                            approvalReceiptRef.current
+                        ) {
+                            const approval = approvalReceiptRef.current;
+                            upsertRunToPortfolio({
+                                id: runIdRef.current,
+                                walletPubkey: walletPda,
+                                agentId: agent.id,
+                                agentName: agent.name,
+                                delegatedUsdc: Math.round(
+                                    delegatedAmountSol * SOL_USDC_REF
+                                ),
+                                receipts: [
+                                    {
+                                        label: approval.label,
+                                        signature: approval.signature,
+                                        explorerUrl: approval.explorerUrl,
+                                        notionalUsdc: 0,
+                                        ts: approval.ts,
+                                    },
+                                    ...nextReceipts.map((r) => ({
+                                        label: r.label,
+                                        signature: r.signature,
+                                        explorerUrl: r.explorerUrl,
+                                        notionalUsdc: r.notionalUsdc,
+                                        ts: r.ts,
+                                    })),
+                                ],
+                                startedAt: runStartedAtRef.current,
+                                completedAt: receipt.ts,
+                                status: "running",
+                            });
+                        }
+                        return nextReceipts;
+                    });
                     setSessionBalanceLamports((prev) =>
                         prev != null ? Math.max(0, prev - TX_FEE_LAMPORTS) : prev
                     );
@@ -398,6 +438,7 @@ export function AgentRunner({ agent }: AgentRunnerProps) {
             agent.executionCopy.oracleTitle,
             agent.executionCopy.oracleDetail,
             agent.id,
+            agent.name,
             appendEvent,
             clearTimers,
             connection,
@@ -409,6 +450,7 @@ export function AgentRunner({ agent }: AgentRunnerProps) {
             sleep,
             start,
             strategy,
+            upsertRunToPortfolio,
         ]
     );
 
@@ -425,6 +467,22 @@ export function AgentRunner({ agent }: AgentRunnerProps) {
     const approveDelegation = useCallback(async () => {
         if (!publicKey) {
             setWalletModalVisible(true);
+            return;
+        }
+
+        const requiredSol = delegatedAmountSol + 0.005;
+        if (
+            walletBalanceSol != null &&
+            walletBalanceSol < requiredSol
+        ) {
+            setApprovalStatus("failed");
+            const isLikelyMainnet =
+                walletBalanceSol < 0.001 && CLUSTER === "devnet";
+            setApprovalError(
+                isLikelyMainnet
+                    ? `Wallet shows ${walletBalanceSol.toFixed(4)} SOL on Solana devnet — likely because your wallet is set to mainnet. Switch your wallet (e.g. Phantom → Settings → Active Network → Devnet) or fund the devnet address from https://faucet.solana.com/, then try again.`
+                    : `Need ${requiredSol.toFixed(3)} SOL on devnet; you have ${walletBalanceSol.toFixed(4)}. Top up at https://faucet.solana.com/ and try again.`
+            );
             return;
         }
 
@@ -455,11 +513,35 @@ export function AgentRunner({ agent }: AgentRunnerProps) {
                 ts: Date.now(),
             };
             setApprovalReceipt(receipt);
+            approvalReceiptRef.current = receipt;
             setApprovalStatus("confirmed");
             setDelegationOpen(false);
             setSessionBalanceLamports(
                 Math.floor(delegatedAmountSol * LAMPORTS_PER_SOL)
             );
+
+            runIdRef.current = `run-${Date.now()}-${burner.publicKey.toBase58().slice(0, 6)}`;
+            runStartedAtRef.current = receipt.ts;
+            upsertRunToPortfolio({
+                id: runIdRef.current,
+                walletPubkey: publicKey.toBase58(),
+                agentId: agent.id,
+                agentName: agent.name,
+                delegatedUsdc: Math.round(delegatedAmountSol * SOL_USDC_REF),
+                receipts: [
+                    {
+                        label: receipt.label,
+                        signature: receipt.signature,
+                        explorerUrl: receipt.explorerUrl,
+                        notionalUsdc: 0,
+                        ts: receipt.ts,
+                    },
+                ],
+                startedAt: receipt.ts,
+                completedAt: receipt.ts,
+                status: "running",
+            });
+
             void refreshWalletBalance();
             void runContinuousLoop(publicKey.toBase58(), burner);
         } catch (error) {
@@ -467,20 +549,38 @@ export function AgentRunner({ agent }: AgentRunnerProps) {
             setApprovalReceipt(null);
             burnerRef.current = null;
             setBurnerPubkey(null);
-            setApprovalError(
-                error instanceof Error
-                    ? error.message
-                    : "The wallet rejected the delegation transaction."
-            );
+            const raw = error instanceof Error ? error.message : String(error);
+            const friendly = (() => {
+                const lower = raw.toLowerCase();
+                if (lower.includes("user rejected") || lower.includes("user denied")) {
+                    return "Approval cancelled in the wallet. Try again when ready.";
+                }
+                if (
+                    lower.includes("insufficient") ||
+                    lower.includes("0x1") ||
+                    lower.includes("insufficient funds")
+                ) {
+                    return `Wallet doesn't have enough SOL on devnet. We're on ${CLUSTER}; if your wallet is set to mainnet, switch it to devnet (Phantom → Settings → Active Network) and fund the address at https://faucet.solana.com/.`;
+                }
+                if (lower.includes("blockhash")) {
+                    return "Devnet RPC timed out fetching a fresh blockhash. Try again in a few seconds.";
+                }
+                return raw;
+            })();
+            setApprovalError(friendly);
         }
     }, [
+        agent.id,
+        agent.name,
         connection,
         delegatedAmountSol,
         publicKey,
         refreshWalletBalance,
         runContinuousLoop,
         setWalletModalVisible,
+        upsertRunToPortfolio,
         wallet,
+        walletBalanceSol,
     ]);
 
     const withdrawSessionKey = useCallback(async () => {
@@ -503,8 +603,42 @@ export function AgentRunner({ agent }: AgentRunnerProps) {
                 ts: Date.now(),
             };
             setWithdrawReceipt(receipt);
-            setExecutionReceipts((prev) => [...prev, receipt]);
-            setSessionBalanceLamports(TX_FEE_LAMPORTS); // tiny dust left
+            setExecutionReceipts((prev) => {
+                const nextReceipts = [...prev, receipt];
+                if (runIdRef.current && approvalReceiptRef.current) {
+                    const approval = approvalReceiptRef.current;
+                    upsertRunToPortfolio({
+                        id: runIdRef.current,
+                        walletPubkey: publicKey.toBase58(),
+                        agentId: agent.id,
+                        agentName: agent.name,
+                        delegatedUsdc: Math.round(
+                            delegatedAmountSol * SOL_USDC_REF
+                        ),
+                        receipts: [
+                            {
+                                label: approval.label,
+                                signature: approval.signature,
+                                explorerUrl: approval.explorerUrl,
+                                notionalUsdc: 0,
+                                ts: approval.ts,
+                            },
+                            ...nextReceipts.map((r) => ({
+                                label: r.label,
+                                signature: r.signature,
+                                explorerUrl: r.explorerUrl,
+                                notionalUsdc: r.notionalUsdc,
+                                ts: r.ts,
+                            })),
+                        ],
+                        startedAt: runStartedAtRef.current || approval.ts,
+                        completedAt: receipt.ts,
+                        status: "withdrawn",
+                    });
+                }
+                return nextReceipts;
+            });
+            setSessionBalanceLamports(TX_FEE_LAMPORTS);
             setWithdrawStatus("done");
             appendEvent(
                 ev(
@@ -529,14 +663,23 @@ export function AgentRunner({ agent }: AgentRunnerProps) {
                 )
             );
         }
-    }, [appendEvent, connection, ev, publicKey, refreshWalletBalance]);
+    }, [
+        agent.id,
+        agent.name,
+        appendEvent,
+        connection,
+        delegatedAmountSol,
+        ev,
+        publicKey,
+        refreshWalletBalance,
+        upsertRunToPortfolio,
+    ]);
 
     const stopAgent = useCallback(() => {
         cancelRef.current = true;
         clearTimers();
 
-        if (approvalReceipt && executionReceipts.length > 0 && publicKey) {
-            const startedAt = approvalReceipt.ts;
+        if (approvalReceipt && publicKey && runIdRef.current) {
             const completedAt =
                 executionReceipts[executionReceipts.length - 1]?.ts ?? Date.now();
             const portfolioReceipts: PortfolioReceipt[] = [
@@ -555,15 +698,16 @@ export function AgentRunner({ agent }: AgentRunnerProps) {
                     ts: r.ts,
                 })),
             ];
-            addRunToPortfolio({
-                id: newEventId(),
+            upsertRunToPortfolio({
+                id: runIdRef.current,
                 walletPubkey: publicKey.toBase58(),
                 agentId: agent.id,
                 agentName: agent.name,
                 delegatedUsdc: Math.round(delegatedAmountSol * SOL_USDC_REF),
                 receipts: portfolioReceipts,
-                startedAt,
+                startedAt: runStartedAtRef.current || approvalReceipt.ts,
                 completedAt,
+                status: "stopped",
             });
         }
 
@@ -584,7 +728,7 @@ export function AgentRunner({ agent }: AgentRunnerProps) {
         );
         stop();
     }, [
-        addRunToPortfolio,
+        upsertRunToPortfolio,
         agent.id,
         agent.name,
         appendEvent,
@@ -637,6 +781,7 @@ export function AgentRunner({ agent }: AgentRunnerProps) {
         clearTimers();
         setApprovalStatus("idle");
         setApprovalReceipt(null);
+        approvalReceiptRef.current = null;
         setApprovalError(undefined);
         setDelegationOpen(false);
         setExecutionReceipts([]);
@@ -649,6 +794,8 @@ export function AgentRunner({ agent }: AgentRunnerProps) {
         setSessionBalanceLamports(null);
         setWithdrawStatus("idle");
         setWithdrawReceipt(null);
+        runIdRef.current = null;
+        runStartedAtRef.current = 0;
         reset();
         void refreshWalletBalance();
     };
