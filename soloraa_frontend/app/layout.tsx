@@ -1,10 +1,19 @@
 import type { Metadata, Viewport } from "next";
 import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
+import { Instrument_Serif } from "next/font/google";
 import { Nav } from "@/components/nav";
 import { Footer } from "@/components/footer";
 import { SolanaWalletProvider } from "@/components/wallet-provider";
 import "./globals.css";
+
+const instrumentSerif = Instrument_Serif({
+    subsets: ["latin"],
+    weight: "400",
+    style: ["normal", "italic"],
+    variable: "--font-display",
+    display: "swap",
+});
 
 export const metadata: Metadata = {
     metadataBase: new URL("https://soloraa.dev"),
@@ -41,7 +50,7 @@ export default function RootLayout({
     return (
         <html
             lang="en"
-            className={`${GeistSans.variable} ${GeistMono.variable} dark`}
+            className={`${GeistSans.variable} ${GeistMono.variable} ${instrumentSerif.variable} dark`}
             suppressHydrationWarning
         >
             <body className="antialiased min-h-screen flex flex-col">
