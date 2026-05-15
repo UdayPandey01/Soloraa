@@ -370,16 +370,6 @@ function Hero() {
                     </motion.div>
                 </div>
             </motion.div>
-
-            <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 1.3, duration: 0.6 }}
-                className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 text-cream-dim"
-            >
-                <span className="font-mono text-[10px] tracking-[0.32em] uppercase">scroll</span>
-                <span className="w-px h-10 bg-cream/30 animate-pulse" />
-            </motion.div>
         </section>
     );
 }
