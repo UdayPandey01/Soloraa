@@ -23,11 +23,6 @@ function explorerUrl(signature: string, cluster: Cluster): string {
     }`;
 }
 
-/**
- * User-signed memo. Requires a Phantom popup. Use this ONLY for the initial
- * delegation step or other intentional user signatures — never inside the
- * autonomous agent loop.
- */
 export async function sendMemo(
     connection: Connection,
     wallet: WalletContextState,
@@ -66,18 +61,6 @@ export async function sendMemo(
     return { signature, explorerUrl: explorerUrl(signature, cluster) };
 }
 
-/**
- * User signs ONE delegation transaction: transfer a bounded amount of devnet
- * SOL from the user's wallet to a freshly-generated session keypair. After
- * this confirms, the session key can pay tx fees autonomously — no further
- * user signatures are required inside the agent loop.
- *
- * This is the devnet stand-in for `register_enclave_v2`. In production, the
- * delegation flow registers an attested enclave's Ed25519 pubkey on-chain
- * and the enclave (not a browser keypair) signs intents. Here we use a
- * browser-generated keypair labelled "session key (local)" because that is
- * what it is — never claim it is attested.
- */
 export async function delegateToBurner(
     connection: Connection,
     wallet: WalletContextState,
@@ -117,11 +100,6 @@ export async function delegateToBurner(
     return { signature, explorerUrl: explorerUrl(signature, cluster) };
 }
 
-/**
- * Session-key signed memo. The agent loop calls this directly — no wallet
- * adapter, no Phantom popup. The session key must be funded with devnet SOL
- * for fees (~5_000 lamports per tx).
- */
 export async function sendMemoWithSigner(
     connection: Connection,
     signer: Keypair,
@@ -157,11 +135,6 @@ export async function sendMemoWithSigner(
     return { signature, explorerUrl: explorerUrl(signature, cluster) };
 }
 
-/**
- * Drain the session key's SOL balance back to the user wallet. Signed by the
- * session key itself — no Phantom popup. Reserves ~5_000 lamports for the
- * withdrawal tx's own fee.
- */
 export async function withdrawFromBurner(
     connection: Connection,
     signer: Keypair,

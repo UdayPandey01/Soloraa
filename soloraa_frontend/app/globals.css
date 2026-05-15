@@ -2,36 +2,24 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ── Design tokens ──────────────────────────────────────────────────────────
- *
- * Single-accent matte-black system. The point isn't to look dark — it's to
- * feel like infrastructure. Backgrounds are unmodulated, borders are one
- * weight, text has three levels, color appears only where state is changing.
- */
-
 :root {
-    /* Surfaces — pure neutral graphite. Slight cool tint at the deepest level. */
-    --bg: 230 8% 6%; /* #0E0F10 */
+    --bg: 230 8% 6%;
     --bg-surface: 230 6% 8%;
     --bg-raised: 230 6% 11%;
 
-    /* Text — high-contrast head, two graytones, one barely-there. */
     --fg: 210 8% 96%;
     --fg-soft: 215 6% 80%;
     --fg-muted: 220 5% 58%;
     --fg-dim: 220 4% 38%;
 
-    /* Borders — single weight, slightly brighter variant for active state. */
     --line: 220 5% 16%;
     --line-bright: 220 5% 22%;
 
-    /* The single accent. Cool indigo-blue, calibrated for restraint. */
-    --accent: 220 100% 74%; /* #7BA3FF */
+    --accent: 220 100% 74%;
 
-    /* State colors. Muted on purpose — they shouldn't ever dominate. */
-    --ok: 162 38% 64%; /* #7FCDB8 */
+    --ok: 162 38% 64%;
     --warn: 38 60% 70%;
-    --danger: 354 64% 68%; /* #E27C8A */
+    --danger: 354 64% 68%;
 
     --font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, sans-serif;
     --font-mono: "Geist Mono", ui-monospace, "SF Mono", "JetBrains Mono", monospace;
@@ -54,7 +42,6 @@ body {
     min-height: 100vh;
 }
 
-/* Subtle grid — only as an accent in hero/landing, not body-wide. */
 .grid-overlay {
     background-image:
         linear-gradient(hsl(var(--line) / 0.55) 1px, transparent 1px),
@@ -95,14 +82,12 @@ body {
     .nums {
         font-variant-numeric: tabular-nums;
     }
-    /* For numeric readouts that need to stay aligned. */
     .mono-num {
         font-family: var(--font-mono);
         font-variant-numeric: tabular-nums;
     }
 }
 
-/* Wallet adapter restyling — drop their gradient default, match our surface. */
 .wallet-adapter-button-trigger {
     background: hsl(var(--bg-surface)) !important;
     border: 1px solid hsl(var(--line-bright)) !important;
@@ -171,14 +156,6 @@ body {
     color: hsl(var(--fg-muted)) !important;
 }
 
-/* ───────────────────────────────────────────────────────────────────────────
- * Landing page — editorial / warm palette + motion utilities.
- *
- * The landing is intentionally scoped: deeper ink background, cream foreground,
- * a single warm-coral accent. Pages inside the product keep the cool indigo
- * accent — different feel, on purpose.
- * ─────────────────────────────────────────────────────────────────────────── */
-
 .landing {
     --ink: 240 8% 4%;
     --ink-rise: 240 6% 6%;
@@ -207,7 +184,6 @@ body {
 .landing .bg-ink          { background: hsl(var(--ink)); }
 .landing .bg-ink-rise     { background: hsl(var(--ink-rise)); }
 
-/* Grain — adds the organic imperfection that defeats "AI stock" vibes. */
 .grain::after {
     content: "";
     position: absolute;
@@ -218,7 +194,6 @@ body {
     background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='1.4' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.55 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
 }
 
-/* Animated gradient mesh — slow, organic, scoped to the hero. */
 .landing-mesh {
     position: absolute;
     inset: -10%;
@@ -271,7 +246,6 @@ body {
     50%      { transform: translate3d(-4%, -6%, 0) scale(1.04); }
 }
 
-/* Marquee — for the moving credit line under the hero. */
 .marquee {
     display: flex;
     gap: 3rem;
@@ -283,7 +257,6 @@ body {
     to   { transform: translateX(-50%); }
 }
 
-/* Subtle blur-reveal used by scroll-into-view sections. */
 .reveal-init {
     opacity: 0;
     filter: blur(8px);
@@ -298,7 +271,6 @@ body {
     transform: translateY(0);
 }
 
-/* Custom cursor (landing only — hidden on touch). */
 @media (hover: hover) and (pointer: fine) {
     .landing-cursor-active,
     .landing-cursor-active * {
@@ -339,12 +311,10 @@ body {
     backdrop-filter: blur(6px);
 }
 
-/* Magnetic CTA — translate towards cursor on hover. */
 .magnet {
     transition: transform 260ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* Section-pin used by the story acts. */
 .pin-sticky {
     position: sticky;
     top: 0;
@@ -352,4 +322,35 @@ body {
     display: flex;
     align-items: center;
     overflow: hidden;
+}
+
+.grain-cinematic {
+    position: absolute;
+    inset: -50%;
+    pointer-events: none;
+    z-index: 1;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 240 240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='1.6' numOctaves='3' stitchTiles='stitch' seed='3'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.7 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+    background-size: 240px 240px;
+    opacity: 0.07;
+    mix-blend-mode: overlay;
+    animation: grain-shift 0.8s steps(8, end) infinite;
+    will-change: transform;
+}
+
+@keyframes grain-shift {
+    0%   { transform: translate(0, 0); }
+    12%  { transform: translate(-3%, -6%); }
+    25%  { transform: translate(-9%, 4%); }
+    37%  { transform: translate(7%, -3%); }
+    50%  { transform: translate(-5%, 8%); }
+    62%  { transform: translate(8%, 5%); }
+    75%  { transform: translate(-7%, -8%); }
+    87%  { transform: translate(4%, 6%); }
+    100% { transform: translate(0, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .grain-cinematic {
+        animation: none;
+    }
 }

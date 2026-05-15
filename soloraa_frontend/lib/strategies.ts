@@ -1,18 +1,3 @@
-/**
- * Per-agent execution strategies.
- *
- * Each agent kind owns its own state shape, cycle logic, and metrics. The
- * AgentRunner is strategy-agnostic — it just calls strategy.tick() per cycle
- * and renders whatever strategy.summary() returns.
- *
- * Adding a new agent type:
- *   1. Add to StrategyKind union.
- *   2. Implement a Strategy<TYourState> object.
- *   3. Register it in STRATEGIES at the bottom.
- *   4. Add an agent entry with `kind: '<your-kind>'` in lib/agents.ts.
- */
-
-/** Reference SOL price used to translate SOL ↔ USDC for display only. */
 export const SOL_USDC_REF = 142;
 
 export type StrategyKind =
@@ -38,36 +23,23 @@ export interface Ticker {
     tone?: MetricTone;
 }
 
-/** Effect of a single cycle. Emitted by strategy.tick(). */
 export interface CycleEffect {
     label: string;
     detail: string;
     memoKind: string;
     notionalUsdc: number;
     realizedDelta: number;
-    /** Override default oracle-stage event detail. */
     oracleEventDetail?: string;
-    /** Override default sign-stage event detail. */
     signEventDetail?: string;
-    /** Override default policy-stage event detail. */
     policyEventDetail?: string;
 }
 
 export interface StrategySummary {
-    /** Two strategy-specific metric cards rendered at slots 3 and 4. */
     metrics: [MetricCard, MetricCard];
-    /** Two strategy-specific live tickers (between Wallet and Session). */
     tickers: [Ticker, Ticker];
-    /** Single-line P&L summary used in the Agent-stopped event. */
     pnlLine: string;
 }
 
-/**
- * Live market context passed to each strategy on every cycle. Sourced from
- * the real Pyth Hermes feed in production. `isLive` is false when the feed
- * has not delivered an update within its freshness window; strategies and
- * the runner treat this as a transient pause condition.
- */
 export interface CycleContext {
     livePrice: number;
     confBps: number;
@@ -90,7 +62,6 @@ export interface Strategy<S = unknown> {
     ): StrategySummary;
 }
 
-// ── Helpers ─────────────────────────────────────────────────────────────────
 
 const fmtUsd = (n: number, decimals = 2) =>
     `${n >= 0 ? "" : "−"}${Math.abs(n).toFixed(decimals)} USDC`;
@@ -107,9 +78,7 @@ function walk(prev: number, vol: number, lo: number, hi: number): number {
     return clamp(prev + move, lo, hi);
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
 // MARKET MAKING
-// ══════════════════════════════════════════════════════════════════════════════
 
 export interface MMState {
     inventory: number; // signed SOL
@@ -266,16 +235,11 @@ export const marketMakingStrategy: Strategy<MMState> = {
     },
 };
 
-// ══════════════════════════════════════════════════════════════════════════════
 // DCA (Dollar-Cost Averaging)
-// ══════════════════════════════════════════════════════════════════════════════
 
 export interface DcaState {
-    /** Cumulative SOL bought across all tranches. */
     cumulativeSol: number;
-    /** Cumulative USDC spent. */
     cumulativeSpent: number;
-    /** Which tranche index we're on (0..n-1, rotates). */
     trancheIndex: number;
 }
 
@@ -359,9 +323,7 @@ export const dcaStrategy: Strategy<DcaState> = {
     },
 };
 
-// ══════════════════════════════════════════════════════════════════════════════
 // STABLECOIN YIELD (venue routing)
-// ══════════════════════════════════════════════════════════════════════════════
 
 type Venue = "Kamino" | "Marginfi" | "Solend";
 
@@ -387,23 +349,19 @@ export const yieldStrategy: Strategy<YieldState> = {
     }),
 
     tick(state, _cycleIndex, _ctx) {
-        // Drift each venue's APR slightly.
         const nextAprs: Record<Venue, number> = {
             Kamino: clamp(walk(state.venueAprs.Kamino, 0.18, 3.5, 7.5), 3, 8),
             Marginfi: clamp(walk(state.venueAprs.Marginfi, 0.18, 3.5, 7.5), 3, 8),
             Solend: clamp(walk(state.venueAprs.Solend, 0.18, 3.5, 7.5), 3, 8),
         };
-        // Best venue this tick.
         const bestVenue = (Object.keys(nextAprs) as Venue[]).reduce((a, b) =>
             nextAprs[a] > nextAprs[b] ? a : b
         );
         const currentApr = nextAprs[state.currentVenue];
         const bestApr = nextAprs[bestVenue];
 
-        // Earnings accrue: pretend each cycle is ~30 minutes of real time.
         const accrual = (state.delegatedUsdc * currentApr / 100) * (30 / 60 / 24 / 365);
 
-        // Decide action: probe → maybe migrate → confirm.
         const cyclesSinceLast = state.lastAction === "confirm" ? 1 : 0;
         let nextAction: "probe" | "migrate" | "confirm";
         let label: string;
@@ -498,9 +456,7 @@ export const yieldStrategy: Strategy<YieldState> = {
     },
 };
 
-// ══════════════════════════════════════════════════════════════════════════════
 // ARBITRAGE (triangular)
-// ══════════════════════════════════════════════════════════════════════════════
 
 export interface ArbState {
     lastEdgeBps: number;
@@ -523,8 +479,6 @@ export const arbitrageStrategy: Strategy<ArbState> = {
     }),
 
     tick(state, cycleIndex, _ctx) {
-        // Edge bps roughly follows a noisy distribution — sometimes below floor (scan only),
-        // sometimes above (execute the loop).
         const edge = clamp(Math.round(Math.random() * 28 + Math.random() * 5 - 5), 0, 32);
         const scanOnly = edge < ARB_EDGE_FLOOR_BPS;
 
@@ -547,7 +501,6 @@ export const arbitrageStrategy: Strategy<ArbState> = {
             };
         }
 
-        // Execute the loop.
         const notional = Math.min(state.delegatedUsdc, 200 + Math.random() * 300);
         const captured = (notional * edge) / 10_000;
         return {
@@ -612,9 +565,7 @@ export const arbitrageStrategy: Strategy<ArbState> = {
     },
 };
 
-// ══════════════════════════════════════════════════════════════════════════════
 // TREASURY REBALANCE
-// ══════════════════════════════════════════════════════════════════════════════
 
 type TreasuryAsset = "SOL" | "USDC" | "JTO";
 
@@ -639,7 +590,6 @@ export const treasuryStrategy: Strategy<TreasuryState> = {
     }),
 
     tick(state, _cycleIndex, _ctx) {
-        // Drift weights slightly each cycle.
         const drift = (asset: TreasuryAsset) =>
             clamp(state.weights[asset] + (Math.random() - 0.5) * 0.04, 0.05, 0.85);
         let weights: Record<TreasuryAsset, number> = {
@@ -647,7 +597,6 @@ export const treasuryStrategy: Strategy<TreasuryState> = {
             USDC: drift("USDC"),
             JTO: drift("JTO"),
         };
-        // Normalize.
         const sum = weights.SOL + weights.USDC + weights.JTO;
         weights = {
             SOL: weights.SOL / sum,
@@ -667,7 +616,6 @@ export const treasuryStrategy: Strategy<TreasuryState> = {
         );
 
         if (state.lastAction === "settle") {
-            // Snapshot — check drift.
             if (maxDriftBps < TREASURY_BAND_BPS) {
                 return {
                     next: { ...state, weights, lastAction: "snapshot" },
@@ -802,9 +750,7 @@ export const treasuryStrategy: Strategy<TreasuryState> = {
     },
 };
 
-// ══════════════════════════════════════════════════════════════════════════════
 // PORTFOLIO REBALANCE (multi-asset, banded)
-// ══════════════════════════════════════════════════════════════════════════════
 
 type PortfolioAsset = "SOL" | "USDC" | "JTO" | "JUP" | "WBTC";
 
@@ -839,7 +785,6 @@ export const portfolioStrategy: Strategy<PortfolioState> = {
             JUP: clamp(state.weights.JUP + (Math.random() - 0.5) * 0.02, 0.05, 0.5),
             WBTC: clamp(state.weights.WBTC + (Math.random() - 0.5) * 0.015, 0.05, 0.4),
         };
-        // Normalize.
         const sum = Object.values(drifted).reduce((a, b) => a + b, 0);
         const weights = Object.fromEntries(
             Object.entries(drifted).map(([k, v]) => [k, v / sum])
@@ -976,9 +921,7 @@ export const portfolioStrategy: Strategy<PortfolioState> = {
     },
 };
 
-// ══════════════════════════════════════════════════════════════════════════════
 // REGISTRY
-// ══════════════════════════════════════════════════════════════════════════════
 
 export const STRATEGIES: Record<StrategyKind, Strategy<unknown>> = {
     "market-making": marketMakingStrategy as Strategy<unknown>,

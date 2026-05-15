@@ -13,17 +13,6 @@ export type StageId =
     | "broadcast"
     | "verify";
 
-/**
- * High-level run state.
- *
- * - idle:    no run has been started.
- * - running: the agent loop is alive and ticking off cycles.
- * - stopped: the user pressed Stop. The pipeline halts but the receipts
- *            collected so far stay on screen.
- *
- * Note: there is intentionally no "completed" mode. A real autonomous agent
- * doesn't have a terminal "done" state — it runs until the user stops it.
- */
 export type ExecutionMode = "idle" | "running" | "stopped";
 
 export interface ExecutionEvent {
@@ -43,16 +32,10 @@ export interface ExecutionRun {
     agentId: string;
     stages: Record<StageId, StageState>;
     events: ExecutionEvent[];
-    /** Signature of the most recent successful leg. Drives the explorer link
-     *  and the replay-attack demo (which reuses these bytes). */
     lastTxSignature?: string;
-    /** Cosmetic rejection (e.g. replay-attack demo). Does NOT end the run. */
     lastRejection?: { code: number; name: string; description: string };
-    /** Bumped on every confirmed leg, mirroring the on-chain nonce. */
     walletNonce: number;
-    /** Count of confirmed broadcasts this run. */
     legsConfirmed: number;
-    /** Running total of notional broadcast through this run, in USDC. */
     cumulativeNotionalUsdc: number;
     mode: ExecutionMode;
 }

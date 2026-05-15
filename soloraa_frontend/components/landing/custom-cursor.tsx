@@ -2,13 +2,6 @@
 
 import { useEffect, useRef } from "react";
 
-/**
- * Two-element custom cursor: a 6px coral dot that tracks the mouse 1:1, and a
- * 28px cream ring that lags slightly for a parallax/inertia feel. The ring
- * grows to 64px over any element marked with `data-cursor="link"`.
- *
- * Disabled on touch devices via the @media query in globals.css.
- */
 export function CustomCursor() {
     const dotRef = useRef<HTMLDivElement>(null);
     const ringRef = useRef<HTMLDivElement>(null);

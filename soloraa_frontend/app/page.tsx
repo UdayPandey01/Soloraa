@@ -55,7 +55,6 @@ export default function LandingPage() {
     );
 }
 
-/* ────────────────────────────────────────────────────────────────────────── */
 
 function OpeningSequence() {
     return (
@@ -101,7 +100,6 @@ function OpeningSequence() {
     );
 }
 
-/* ────────────────────────────────────────────────────────────────────────── */
 
 function Hero() {
     const ref = useRef<HTMLElement>(null);
@@ -128,7 +126,6 @@ function Hero() {
             ref={ref}
             className="relative min-h-screen flex items-center justify-center overflow-hidden grain bg-ink"
         >
-            {/* Animated mesh background. */}
             <div className="landing-mesh" aria-hidden>
                 <span
                     className="mesh-coral"
@@ -145,10 +142,6 @@ function Hero() {
                 <span className="mesh-indigo" />
             </div>
 
-            {/* Hero asset — video on desktop (with poster fallback to the still),
-                still-image on mobile (where autoplay-loop is unreliable + saves
-                bandwidth). The transform crops the Veo watermark off the bottom
-                of the video; the corner gradient below is a safety net. */}
             <video
                 autoPlay
                 muted
@@ -173,8 +166,6 @@ function Hero() {
                     transformOrigin: "center center",
                 }}
             />
-            {/* Watermark cover — fades the bottom-right corner into ink, just
-                in case the transform crop leaves any sliver of the Veo logo. */}
             <div
                 aria-hidden
                 className="absolute right-0 bottom-0 w-[260px] h-[110px] pointer-events-none z-[2]"
@@ -243,7 +234,6 @@ function Hero() {
                         </motion.div>
                     </div>
 
-                    {/* Right column — a single editorial pull-quote that grounds the image. */}
                     <motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
@@ -263,7 +253,6 @@ function Hero() {
                 </div>
             </motion.div>
 
-            {/* Scroll cue */}
             <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -277,7 +266,6 @@ function Hero() {
     );
 }
 
-/* ────────────────────────────────────────────────────────────────────────── */
 
 function Marquee() {
     const items = [
@@ -308,7 +296,6 @@ function Marquee() {
     );
 }
 
-/* ────────────────────────────────────────────────────────────────────────── */
 
 function ProblemAct() {
     return (
@@ -352,7 +339,6 @@ function ProblemAct() {
     );
 }
 
-/* ────────────────────────────────────────────────────────────────────────── */
 
 function DeletedKeyAct() {
     return (
@@ -396,7 +382,6 @@ function DeletedKeyAct() {
     );
 }
 
-/* ────────────────────────────────────────────────────────────────────────── */
 
 function ArchitectureAct() {
     return (
@@ -439,7 +424,6 @@ function ArchitectureAct() {
     );
 }
 
-/* ────────────────────────────────────────────────────────────────────────── */
 
 function AgentsTeaser() {
     const live = AGENTS.filter((a) => a.status === "live").slice(0, 4);
@@ -497,7 +481,6 @@ function AgentsTeaser() {
     );
 }
 
-/* ────────────────────────────────────────────────────────────────────────── */
 
 function ClosingCTA() {
     return (
@@ -531,7 +514,6 @@ function ClosingCTA() {
     );
 }
 
-/* ── Helpers ────────────────────────────────────────────────────────────── */
 
 function MagneticLink({
     href,
@@ -640,10 +622,6 @@ function KeyRow({
     );
 }
 
-/**
- * Wrap a section to add a blur-and-rise reveal as it enters the viewport.
- * Pure intersection observer — no scroll listeners, no layout thrash.
- */
 function Reveal({ children }: { children: React.ReactNode }) {
     const ref = useRef<HTMLDivElement>(null);
     useEffect(() => {

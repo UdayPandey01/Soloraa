@@ -59,7 +59,6 @@ interface DevnetReceipt {
     label: string;
     signature: string;
     explorerUrl: string;
-    /** USDC-equivalent notional flowing through this leg. Display only. */
     notionalUsdc: number;
     ts: number;
 }
@@ -83,7 +82,6 @@ const STAGE_MS = {
 } as const;
 const CYCLE_GAP_MS = 5000;
 
-// ── Component ────────────────────────────────────────────────────────────────
 
 export function AgentRunner({ agent }: AgentRunnerProps) {
     const { connection } = useConnection();
@@ -122,7 +120,6 @@ export function AgentRunner({ agent }: AgentRunnerProps) {
     const strategy = useMemo(() => getStrategy(agent.kind), [agent.kind]);
     const strategyStateRef = useRef<unknown>(strategy.init(DEFAULT_DELEGATION_SOL));
 
-    // Live Pyth SOL/USDC feed. Drives every strategy that prices in SOL.
     const pyth = usePythPrice();
     const pythCtxRef = useRef<CycleContext>({
         livePrice: SOL_USDC_REF,
@@ -154,7 +151,6 @@ export function AgentRunner({ agent }: AgentRunnerProps) {
     const [withdrawStatus, setWithdrawStatus] = useState<"idle" | "running" | "done" | "failed">("idle");
     const [withdrawReceipt, setWithdrawReceipt] = useState<DevnetReceipt | null>(null);
 
-    // Read the user's wallet balance on connect and after delegations land.
     const refreshWalletBalance = useCallback(async () => {
         if (!publicKey) {
             setWalletBalanceSol(null);
@@ -164,7 +160,6 @@ export function AgentRunner({ agent }: AgentRunnerProps) {
             const lamports = await connection.getBalance(publicKey, "confirmed");
             setWalletBalanceSol(lamports / LAMPORTS_PER_SOL);
         } catch {
-            // Soft-fail — UI just shows '—' for the wallet balance.
         }
     }, [connection, publicKey]);
 
@@ -172,7 +167,6 @@ export function AgentRunner({ agent }: AgentRunnerProps) {
         void refreshWalletBalance();
     }, [refreshWalletBalance]);
 
-    // Clamp the chosen amount whenever the wallet balance comes in.
     useEffect(() => {
         if (walletBalanceSol == null) return;
         const ceiling = Math.max(0.01, Math.min(1.0, walletBalanceSol - 0.01));
@@ -220,11 +214,6 @@ export function AgentRunner({ agent }: AgentRunnerProps) {
         []
     );
 
-    /**
-     * Continuous agent loop. Cycles the pipeline, simulates a market state,
-     * and broadcasts one real devnet memo per cycle — signed by the session
-     * key, not the user wallet. Runs until the user presses Stop.
-     */
     const runContinuousLoop = useCallback(
         async (walletPda: string, burner: Keypair) => {
             const loopId = ++loopOwnerRef.current;
@@ -244,9 +233,6 @@ export function AgentRunner({ agent }: AgentRunnerProps) {
             while (isLive()) {
                 const cycleNumber = cycleIndex + 1;
 
-                // Block the cycle if Pyth hasn't delivered a fresh update.
-                // The agent is supposed to refuse signing on stale oracle
-                // data — that's the whole point of the policy gate.
                 if (!pythCtxRef.current.isLive) {
                     appendEvent(
                         ev(
@@ -402,7 +388,6 @@ export function AgentRunner({ agent }: AgentRunnerProps) {
                             err instanceof Error ? err.message : String(err)
                         )
                     );
-                    // Continue the loop — transient RPC failures shouldn't kill the agent.
                 }
 
                 cycleIndex += 1;
@@ -437,11 +422,6 @@ export function AgentRunner({ agent }: AgentRunnerProps) {
         setDelegationOpen(true);
     }, [connected, publicKey, setWalletModalVisible]);
 
-    /**
-     * Generates a session keypair, has the user sign ONE devnet SOL transfer
-     * into it, and starts the autonomous loop. After this point no further
-     * user signatures are required — the session key signs every cycle.
-     */
     const approveDelegation = useCallback(async () => {
         if (!publicKey) {
             setWalletModalVisible(true);
@@ -503,10 +483,6 @@ export function AgentRunner({ agent }: AgentRunnerProps) {
         wallet,
     ]);
 
-    /**
-     * Drains the session key back to the user wallet. Session key signs the
-     * refund itself — no Phantom popup. Available after Stop.
-     */
     const withdrawSessionKey = useCallback(async () => {
         const burner = burnerRef.current;
         if (!burner || !publicKey) return;
@@ -978,7 +954,6 @@ export function AgentRunner({ agent }: AgentRunnerProps) {
     );
 }
 
-// ── Strategy-driven subcomponents ────────────────────────────────────────────
 
 function StrategyMetricCard({ metric }: { metric: MetricCard }) {
     const toneClass =

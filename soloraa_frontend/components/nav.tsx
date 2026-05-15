@@ -18,7 +18,9 @@ const NAV_LINKS = [
 
 export function Nav() {
     const pathname = usePathname();
+    const isLanding = pathname === "/";
     const [mobileOpen, setMobileOpen] = useState(false);
+    const [scrolled, setScrolled] = useState(false);
 
     useEffect(() => {
         setMobileOpen(false);
@@ -33,12 +35,30 @@ export function Nav() {
         };
     }, [mobileOpen]);
 
+    useEffect(() => {
+        if (!isLanding) {
+            setScrolled(true);
+            return;
+        }
+        const onScroll = () => setScrolled(window.scrollY > 80);
+        onScroll();
+        window.addEventListener("scroll", onScroll, { passive: true });
+        return () => window.removeEventListener("scroll", onScroll);
+    }, [isLanding]);
+
     return (
         <motion.header
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, ease: [0.21, 1.02, 0.73, 1] }}
-            className="sticky top-0 z-50 border-b border-line/50 bg-bg/80 backdrop-blur-xl"
+            className={cn(
+                "sticky top-0 z-50 transition-[background-color,border-color,backdrop-filter] duration-300",
+                isLanding
+                    ? scrolled
+                        ? "border-b border-white/10 bg-black/40 backdrop-blur-xl"
+                        : "border-b border-transparent bg-transparent backdrop-blur-0"
+                    : "border-b border-line/50 bg-bg/80 backdrop-blur-xl"
+            )}
         >
             <div className="mx-auto max-w-7xl px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
                 <Link href="/" className="flex items-center gap-2.5 group">
@@ -55,20 +75,27 @@ export function Nav() {
                     {NAV_LINKS.map((link) => {
                         const active =
                             pathname === link.href || pathname.startsWith(`${link.href}/`);
+                        const inactiveText = isLanding
+                            ? "text-white/70 hover:text-white"
+                            : "text-fg-muted hover:text-fg";
+                        const activeText = isLanding ? "text-white" : "text-fg";
                         return (
                             <Link
                                 key={link.href}
                                 href={link.href}
                                 className={cn(
                                     "relative px-3 py-1.5 text-sm transition-colors",
-                                    active ? "text-fg" : "text-fg-muted hover:text-fg"
+                                    active ? activeText : inactiveText
                                 )}
                             >
                                 {link.label}
                                 {active && (
                                     <motion.span
                                         layoutId="nav-underline"
-                                        className="absolute inset-x-3 -bottom-[13px] h-px bg-fg"
+                                        className={cn(
+                                            "absolute inset-x-3 -bottom-[13px] h-px",
+                                            isLanding ? "bg-white" : "bg-fg"
+                                        )}
                                         transition={{ type: "spring", stiffness: 380, damping: 30 }}
                                     />
                                 )}
