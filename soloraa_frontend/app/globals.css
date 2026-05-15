@@ -275,54 +275,6 @@ body {
     transform: translateY(0);
 }
 
-@media (hover: hover) and (pointer: fine) {
-    .landing-cursor-active,
-    .landing-cursor-active * {
-        cursor: none !important;
-    }
-}
-
-.cursor-dot,
-.cursor-ring {
-    position: fixed;
-    top: 0;
-    left: 0;
-    pointer-events: none;
-    z-index: 9999;
-    will-change: transform;
-    transition: transform 80ms linear, width 220ms cubic-bezier(0.16, 1, 0.3, 1),
-                height 220ms cubic-bezier(0.16, 1, 0.3, 1),
-                background 220ms ease, border-color 220ms ease;
-}
-.cursor-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: hsl(var(--coral));
-    transform: translate3d(-50%, -50%, 0);
-}
-.cursor-ring {
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    border: 1px solid hsl(var(--cream) / 0.6);
-    transform: translate3d(-50%, -50%, 0);
-}
-.cursor-ring.hover {
-    width: 64px;
-    height: 64px;
-    background: hsl(var(--coral) / 0.08);
-    border-color: hsl(var(--coral) / 0.7);
-    backdrop-filter: blur(6px);
-}
-
-@media (hover: none), (pointer: coarse) {
-    .cursor-dot,
-    .cursor-ring {
-        display: none;
-    }
-}
-
 .magnet {
     transition: transform 260ms cubic-bezier(0.16, 1, 0.3, 1);
 }

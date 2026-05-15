@@ -5,7 +5,6 @@ import Link from "next/link";
 import { AnimatePresence, motion, useScroll, useTransform } from "framer-motion";
 import { ArrowRight, ArrowUpRight } from "lucide-react";
 import { AGENTS } from "@/lib/agents";
-import { CustomCursor } from "@/components/landing/custom-cursor";
 
 const OPENING_MS = 3400;
 
@@ -20,7 +19,6 @@ export default function LandingPage() {
 
     return (
         <div className="landing relative">
-            <CustomCursor />
             <AnimatePresence mode="wait">
                 {!openingDone && <OpeningSequence key="open" />}
             </AnimatePresence>
