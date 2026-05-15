@@ -1,51 +1,23 @@
-import {
-    ComputeBudgetProgram,
-    Connection,
-    Ed25519Program,
-    PublicKey,
-    SystemProgram,
-    Transaction,
-    SYSVAR_INSTRUCTIONS_PUBKEY,
-} from "@solana/web3.js";
+import { ComputeBudgetProgram, Connection, Ed25519Program, PublicKey, SystemProgram, Transaction, SYSVAR_INSTRUCTIONS_PUBKEY, } from "@solana/web3.js";
 import * as ed25519 from "@noble/ed25519";
-import {
-    INTENT_DOMAIN,
-    INTENT_OFFSETS,
-    SOLORA_INTENT_V2_BYTES,
-    ERROR_NAMES,
-    ERROR_DOCS,
-} from "./constants.js";
-import type {
-    ArbitraryCpiIntent,
-    ExecutionIntent,
-    ExecutionResult,
-    ExecutionStreamEvent,
-    IntentFields,
-    LendIntent,
-    SoloraaClientConfig,
-    StreamOpts,
-    SwapIntent,
-    VerifyIntentInput,
-    VerifyResult,
-} from "./types.js";
-
+import { INTENT_DOMAIN, INTENT_OFFSETS, SOLORA_INTENT_V2_BYTES, ERROR_NAMES, ERROR_DOCS, } from "./constants.js";
 /**
  * Soloraa client. Holds the three endpoints it needs and the wallet PDA it
  * acts on behalf of. The client never holds a private key — every signature
  * comes from the attested enclave service.
  */
 export class SoloraaClient {
-    private readonly conn: Connection;
-    private readonly enclaveUrl: string;
-    private readonly walletPda: PublicKey;
-    private readonly cuLimit: number;
-    private readonly expirySlotsAhead: number;
-    private readonly relayer?: SoloraaClientConfig["relayerKeypair"];
-
-    constructor(config: SoloraaClientConfig) {
-        if (!config.rpcUrl) throw new Error("SoloraaClient: rpcUrl is required");
-        if (!config.enclaveUrl) throw new Error("SoloraaClient: enclaveUrl is required");
-
+    conn;
+    enclaveUrl;
+    walletPda;
+    cuLimit;
+    expirySlotsAhead;
+    relayer;
+    constructor(config) {
+        if (!config.rpcUrl)
+            throw new Error("SoloraaClient: rpcUrl is required");
+        if (!config.enclaveUrl)
+            throw new Error("SoloraaClient: enclaveUrl is required");
         this.conn = new Connection(config.rpcUrl, "confirmed");
         this.enclaveUrl = config.enclaveUrl.replace(/\/$/, "");
         this.walletPda =
@@ -56,44 +28,33 @@ export class SoloraaClient {
         this.expirySlotsAhead = Math.max(5, config.expirySlotsAhead ?? 60);
         this.relayer = config.relayerKeypair;
     }
-
     /**
      * Submit an intent, get the confirmed transaction back. Blocks until
      * Solana reaches `confirmed` commitment on the result.
      */
-    async execute(intent: ExecutionIntent): Promise<ExecutionResult> {
+    async execute(intent) {
         const slot = await this.conn.getSlot("confirmed");
         const expirySlot = BigInt(slot + this.expirySlotsAhead);
-
         const enclaveReq = this.buildEnclaveRequest(intent, expirySlot);
         const signed = await this.dispatchToEnclave(enclaveReq);
-
         const tx = this.buildWrappingTx({
             message: signed.message,
             signature: signed.signature,
             enclavePubkey: signed.pubkey,
             intent,
         });
-
         if (!this.relayer) {
-            throw new Error(
-                "SoloraaClient.execute(): no relayer keypair configured — cannot sign and broadcast. " +
-                    "Pass `relayerKeypair` to the client or use `prepare()` to get the raw tx."
-            );
+            throw new Error("SoloraaClient.execute(): no relayer keypair configured — cannot sign and broadcast. " +
+                "Pass `relayerKeypair` to the client or use `prepare()` to get the raw tx.");
         }
-
         const { blockhash } = await this.conn.getLatestBlockhash("confirmed");
         tx.recentBlockhash = blockhash;
         tx.feePayer = this.relayer.publicKey;
         tx.sign(this.relayer);
-
         const signature = await this.conn.sendRawTransaction(tx.serialize(), {
             preflightCommitment: "confirmed",
         });
-        const confirmed = await this.conn.confirmTransaction(
-            { signature, blockhash, lastValidBlockHeight: slot + 150 },
-            "confirmed"
-        );
+        const confirmed = await this.conn.confirmTransaction({ signature, blockhash, lastValidBlockHeight: slot + 150 }, "confirmed");
         if (confirmed.value.err) {
             const errStr = JSON.stringify(confirmed.value.err);
             const code = this.extractErrorCode(errStr);
@@ -104,7 +65,6 @@ export class SoloraaClient {
                 : `On-chain rejection: ${errStr}`;
             throw new SoloraaExecutionError(code, name, detail, docUrl);
         }
-
         // The signed message commits to nonce; the on-chain bump means the new
         // post-execution nonce equals signed_nonce + 1.
         const nonceFromMessage = readU64LE(signed.message, INTENT_OFFSETS.nonce);
@@ -115,7 +75,6 @@ export class SoloraaClient {
             confirmedSlot: slot,
         };
     }
-
     /**
      * Re-derive the canonical message from raw bytes and run light validation.
      * Useful for tooling that observes intents without broadcasting. Note: a
@@ -123,7 +82,7 @@ export class SoloraaClient {
      * structure, the domain prefix, message length, and the signature against
      * the supplied pubkey.
      */
-    async verifyIntent(input: VerifyIntentInput): Promise<VerifyResult> {
+    async verifyIntent(input) {
         if (input.message.length !== SOLORA_INTENT_V2_BYTES) {
             return { ok: false, reason: "wrong_length" };
         }
@@ -132,44 +91,28 @@ export class SoloraaClient {
         if (domainStr !== INTENT_DOMAIN) {
             return { ok: false, reason: "wrong_domain" };
         }
-
-        const sigOk = await this.verifyEd25519(
-            input.message,
-            input.signature,
-            input.enclavePubkey
-        );
+        const sigOk = await this.verifyEd25519(input.message, input.signature, input.enclavePubkey);
         if (!sigOk) {
             return { ok: false, reason: "bad_signature" };
         }
-
-        const fields: IntentFields = {
+        const fields = {
             domain: domainStr,
-            programId: bytesToBase58(
-                input.message.slice(INTENT_OFFSETS.programId, INTENT_OFFSETS.walletPda)
-            ),
-            walletPda: bytesToBase58(
-                input.message.slice(INTENT_OFFSETS.walletPda, INTENT_OFFSETS.nonce)
-            ),
+            programId: bytesToBase58(input.message.slice(INTENT_OFFSETS.programId, INTENT_OFFSETS.walletPda)),
+            walletPda: bytesToBase58(input.message.slice(INTENT_OFFSETS.walletPda, INTENT_OFFSETS.nonce)),
             nonce: readU64LE(input.message, INTENT_OFFSETS.nonce),
             expirySlot: readU64LE(input.message, INTENT_OFFSETS.expirySlot),
-            recentBlockhash: bytesToHex(
-                input.message.slice(
-                    INTENT_OFFSETS.recentBlockhash,
-                    INTENT_OFFSETS.blockhashSlot
-                )
-            ),
+            recentBlockhash: bytesToHex(input.message.slice(INTENT_OFFSETS.recentBlockhash, INTENT_OFFSETS.blockhashSlot)),
             blockhashSlot: readU64LE(input.message, INTENT_OFFSETS.blockhashSlot),
             kind: input.message[INTENT_OFFSETS.kind] ?? 0,
             payloadHash: bytesToHex(input.message.slice(INTENT_OFFSETS.payloadHash)),
         };
         return { ok: true, fields };
     }
-
     /**
      * Subscribe to the seven-stage execution lifecycle for an in-flight run.
      * Backed by Server-Sent Events from /api/agent/run on the host.
      */
-    async *stream(opts: StreamOpts): AsyncIterable<ExecutionStreamEvent> {
+    async *stream(opts) {
         const url = `${this.enclaveUrl}/runs/${encodeURIComponent(opts.runId)}/stream`;
         const resp = await fetch(url, { headers: { Accept: "text/event-stream" } });
         if (!resp.ok || !resp.body) {
@@ -178,11 +121,11 @@ export class SoloraaClient {
         const reader = resp.body.getReader();
         const decoder = new TextDecoder();
         let buf = "";
-
         try {
             while (true) {
                 const { value, done } = await reader.read();
-                if (done) return;
+                if (done)
+                    return;
                 buf += decoder.decode(value, { stream: true });
                 let i;
                 while ((i = buf.indexOf("\n\n")) !== -1) {
@@ -191,22 +134,23 @@ export class SoloraaClient {
                     const data = frame.startsWith("data:")
                         ? frame.slice(5).trim()
                         : frame;
-                    if (!data) continue;
+                    if (!data)
+                        continue;
                     try {
-                        yield JSON.parse(data) as ExecutionStreamEvent;
-                    } catch {
+                        yield JSON.parse(data);
+                    }
+                    catch {
                         // skip malformed frames
                     }
                 }
             }
-        } finally {
-            reader.cancel().catch(() => {});
+        }
+        finally {
+            reader.cancel().catch(() => { });
         }
     }
-
     // ── private ──────────────────────────────────────────────────────────────
-
-    private buildEnclaveRequest(intent: ExecutionIntent, expirySlot: bigint) {
+    buildEnclaveRequest(intent, expirySlot) {
         const walletBase58 = this.walletPda.toBase58();
         switch (intent.action) {
             case "transfer":
@@ -233,11 +177,7 @@ export class SoloraaClient {
                 };
         }
     }
-
-    private async dispatchToEnclave(req: {
-        path: string;
-        body: unknown;
-    }): Promise<{ message: Uint8Array; signature: Uint8Array; pubkey: string }> {
+    async dispatchToEnclave(req) {
         const url = `${this.enclaveUrl}${req.path}`;
         const resp = await fetch(url, {
             method: "POST",
@@ -248,75 +188,50 @@ export class SoloraaClient {
             const text = await resp.text().catch(() => "");
             throw new Error(`enclave ${req.path} -> ${resp.status}: ${text}`);
         }
-        const json = (await resp.json()) as {
-            message_hex?: string;
-            signature_hex?: string;
-            pubkey_base58?: string;
-        };
+        const json = (await resp.json());
         if (!json.message_hex || !json.signature_hex || !json.pubkey_base58) {
             throw new Error(`enclave ${req.path}: malformed response`);
         }
         const message = hexToBytes(json.message_hex);
         const signature = hexToBytes(json.signature_hex);
         if (message.length !== SOLORA_INTENT_V2_BYTES) {
-            throw new Error(
-                `enclave returned ${message.length}B; expected ${SOLORA_INTENT_V2_BYTES}`
-            );
+            throw new Error(`enclave returned ${message.length}B; expected ${SOLORA_INTENT_V2_BYTES}`);
         }
         if (signature.length !== 64) {
             throw new Error(`enclave returned ${signature.length}B sig; expected 64`);
         }
         return { message, signature, pubkey: json.pubkey_base58 };
     }
-
-    private buildWrappingTx(args: {
-        message: Uint8Array;
-        signature: Uint8Array;
-        enclavePubkey: string;
-        intent: ExecutionIntent;
-    }) {
+    buildWrappingTx(args) {
         const enclavePk = new PublicKey(args.enclavePubkey);
         const tx = new Transaction();
-
-        tx.add(
-            ComputeBudgetProgram.setComputeUnitLimit({ units: this.cuLimit })
-        );
-
-        tx.add(
-            Ed25519Program.createInstructionWithPublicKey({
-                publicKey: enclavePk.toBytes(),
-                message: args.message,
-                signature: args.signature,
-            })
-        );
-
+        tx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: this.cuLimit }));
+        tx.add(Ed25519Program.createInstructionWithPublicKey({
+            publicKey: enclavePk.toBytes(),
+            message: args.message,
+            signature: args.signature,
+        }));
         // The execute ix shape depends on intent kind — for the public SDK
         // surface we wire the transfer path here. For the swap/lend/cpi
         // variants, the program's execute_intent ix accepts the canonical
         // signed bytes plus the relayer's reconstructed account metas.
         if (args.intent.action === "transfer") {
-            tx.add(
-                SystemProgram.transfer({
-                    fromPubkey: this.walletPda,
-                    toPubkey:
-                        typeof args.intent.destination === "string"
-                            ? new PublicKey(args.intent.destination)
-                            : args.intent.destination,
-                    lamports: Number(args.intent.amount),
-                })
-            );
-        } else {
+            tx.add(SystemProgram.transfer({
+                fromPubkey: this.walletPda,
+                toPubkey: typeof args.intent.destination === "string"
+                    ? new PublicKey(args.intent.destination)
+                    : args.intent.destination,
+                lamports: Number(args.intent.amount),
+            }));
+        }
+        else {
             // Placeholder for swap/lend/cpi until the on-chain dispatch
             // landing for the public catalog ix is stable.
-            throw new Error(
-                `SoloraaClient.execute(${args.intent.action}): SDK wrapping not yet implemented in this build; use the enclave's structured-intent flow directly.`
-            );
+            throw new Error(`SoloraaClient.execute(${args.intent.action}): SDK wrapping not yet implemented in this build; use the enclave's structured-intent flow directly.`);
         }
-
         tx.feePayer = this.relayer ? this.relayer.publicKey : this.walletPda;
         return tx;
     }
-
     /**
      * Real Ed25519 verification of (message, signature, pubkey) using the
      * pure-JS @noble/ed25519 implementation. Runs entirely client-side;
@@ -326,52 +241,44 @@ export class SoloraaClient {
      * Returns false on any malformed input rather than throwing — the caller
      * decides how to surface the rejection.
      */
-    private async verifyEd25519(
-        message: Uint8Array,
-        signature: Uint8Array,
-        pubkeyBase58: string
-    ): Promise<boolean> {
+    async verifyEd25519(message, signature, pubkeyBase58) {
         try {
-            if (signature.length !== 64) return false;
+            if (signature.length !== 64)
+                return false;
             const pubkeyBytes = new PublicKey(pubkeyBase58).toBytes();
-            if (pubkeyBytes.length !== 32) return false;
+            if (pubkeyBytes.length !== 32)
+                return false;
             return await ed25519.verifyAsync(signature, message, pubkeyBytes);
-        } catch {
+        }
+        catch {
             return false;
         }
     }
-
-    private extractErrorCode(errStr: string): number | undefined {
+    extractErrorCode(errStr) {
         // Anchor errors land as "0xNNNN" inside the InstructionError tuple.
         const m = errStr.match(/0x([0-9a-fA-F]+)/);
-        return m ? parseInt(m[1]!, 16) : undefined;
+        return m ? parseInt(m[1], 16) : undefined;
     }
-
     // Sysvar reference kept for downstream consumers building custom flows.
-    readonly sysvarInstructions = SYSVAR_INSTRUCTIONS_PUBKEY;
+    sysvarInstructions = SYSVAR_INSTRUCTIONS_PUBKEY;
 }
-
 export class SoloraaExecutionError extends Error {
-    constructor(
-        public readonly code: number | undefined,
-        public readonly name_: string | undefined,
-        message: string,
-        public readonly docUrl?: string
-    ) {
+    code;
+    name_;
+    docUrl;
+    constructor(code, name_, message, docUrl) {
         super(message);
+        this.code = code;
+        this.name_ = name_;
+        this.docUrl = docUrl;
         this.name = "SoloraaExecutionError";
     }
 }
-
 // ── helpers ──────────────────────────────────────────────────────────────────
-
-function toBase58(value: string | PublicKey): string {
+function toBase58(value) {
     return typeof value === "string" ? value : value.toBase58();
 }
-
-function serializeIntent(
-    intent: SwapIntent | LendIntent | ArbitraryCpiIntent
-): Record<string, unknown> {
+function serializeIntent(intent) {
     if (intent.action === "swap") {
         return {
             protocol: intent.protocol,
@@ -398,32 +305,26 @@ function serializeIntent(
         })),
     };
 }
-
-function hexToBytes(hex: string): Uint8Array {
+function hexToBytes(hex) {
     const clean = hex.startsWith("0x") ? hex.slice(2) : hex;
-    if (clean.length % 2 !== 0) throw new Error("hexToBytes: odd-length hex");
+    if (clean.length % 2 !== 0)
+        throw new Error("hexToBytes: odd-length hex");
     const out = new Uint8Array(clean.length / 2);
     for (let i = 0; i < out.length; i++) {
         out[i] = parseInt(clean.substr(i * 2, 2), 16);
     }
     return out;
 }
-
-function bytesToHex(bytes: Uint8Array): string {
+function bytesToHex(bytes) {
     return Array.from(bytes)
         .map((b) => b.toString(16).padStart(2, "0"))
         .join("");
 }
-
-function bytesToBase58(bytes: Uint8Array): string {
+function bytesToBase58(bytes) {
     return new PublicKey(bytes).toBase58();
 }
-
-function readU64LE(bytes: Uint8Array, offset: number): bigint {
-    const view = new DataView(
-        bytes.buffer,
-        bytes.byteOffset + offset,
-        8
-    );
+function readU64LE(bytes, offset) {
+    const view = new DataView(bytes.buffer, bytes.byteOffset + offset, 8);
     return view.getBigUint64(0, true);
 }
+//# sourceMappingURL=client.js.map

@@ -1,6 +1,6 @@
 {
-    "name": "@soloraa/sdk",
-    "version": "0.1.0",
+    "name": "@soloraaa/sdk",
+    "version": "0.2.0",
     "description": "Cryptographic execution layer for autonomous AI agents on Solana. Submit structured intents to an attested enclave; on-chain verification rejects anything that doesn't match the wallet's policy.",
     "license": "MIT",
     "type": "module",
@@ -21,6 +21,7 @@
         "typecheck": "tsc -p tsconfig.json --noEmit"
     },
     "dependencies": {
+        "@noble/ed25519": "^2.3.0",
         "@solana/web3.js": "^1.98.0"
     },
     "devDependencies": {
