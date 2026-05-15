@@ -7,8 +7,8 @@ import { ArrowRight, ArrowUpRight } from "lucide-react";
 import { AGENTS } from "@/lib/agents";
 import { CustomCursor } from "@/components/landing/custom-cursor";
 
-const OPENING_LS_KEY = "solora.opening.v2.seen";
-const OPENING_MS = 2400;
+const OPENING_LS_KEY = "solora.opening.v3.seen";
+const OPENING_MS = 3400;
 
 export default function LandingPage() {
     const [openingDone, setOpeningDone] = useState<boolean | null>(null);
@@ -56,12 +56,94 @@ export default function LandingPage() {
 }
 
 
+const SCRAMBLE_TARGET = "SOLORA_INTENT_V2";
+const SCRAMBLE_CHARS = "0123456789ABCDEF*_-+#$%@";
+
+function ScrambleText({
+    target,
+    lock,
+}: {
+    target: string;
+    lock: boolean;
+}) {
+    const [chars, setChars] = useState<string[]>(() =>
+        target.split("").map(
+            () => SCRAMBLE_CHARS[Math.floor(Math.random() * SCRAMBLE_CHARS.length)]!
+        )
+    );
+    const [lockedCount, setLockedCount] = useState(0);
+
+    useEffect(() => {
+        if (!lock) {
+            setLockedCount(0);
+            return;
+        }
+        const perCharMs = 700 / target.length;
+        const timers: ReturnType<typeof setTimeout>[] = [];
+        for (let i = 1; i <= target.length; i++) {
+            timers.push(setTimeout(() => setLockedCount(i), i * perCharMs));
+        }
+        return () => timers.forEach(clearTimeout);
+    }, [lock, target]);
+
+    useEffect(() => {
+        const interval = setInterval(() => {
+            setChars(
+                target.split("").map((targetChar, i) => {
+                    if (i < lockedCount) return targetChar;
+                    return SCRAMBLE_CHARS[
+                        Math.floor(Math.random() * SCRAMBLE_CHARS.length)
+                    ]!;
+                })
+            );
+        }, 40);
+        return () => clearInterval(interval);
+    }, [target, lockedCount]);
+
+    return (
+        <>
+            {chars.map((c, i) => (
+                <motion.span
+                    key={i}
+                    animate={{
+                        color:
+                            i < lockedCount
+                                ? "hsl(var(--cream))"
+                                : "hsl(var(--coral) / 0.85)",
+                    }}
+                    transition={{ duration: 0.2 }}
+                    className="inline-block"
+                    style={{ width: "0.62em", textAlign: "center" }}
+                >
+                    {c}
+                </motion.span>
+            ))}
+        </>
+    );
+}
+
 function OpeningSequence() {
+    const [phase, setPhase] = useState<0 | 1 | 2 | 3>(0);
+
+    useEffect(() => {
+        const timers = [
+            setTimeout(() => setPhase(1), 650),
+            setTimeout(() => setPhase(2), 1550),
+            setTimeout(() => setPhase(3), 2450),
+        ];
+        return () => timers.forEach(clearTimeout);
+    }, []);
+
     return (
         <motion.div
             className="fixed inset-0 z-[100] bg-ink flex items-center justify-center grain overflow-hidden"
             initial={{ opacity: 1 }}
-            exit={{ opacity: 0, transition: { duration: 0.7, ease: [0.16, 1, 0.3, 1] } }}
+            exit={{
+                opacity: 0,
+                scale: 1.04,
+                filter: "blur(12px)",
+                transition: { duration: 0.7, ease: [0.16, 1, 0.3, 1] },
+            }}
         >
             <div className="absolute inset-0">
                 <div className="landing-mesh">
@@ -70,31 +152,67 @@ function OpeningSequence() {
                     <span className="mesh-indigo" />
                 </div>
             </div>
-            <div className="relative text-center px-6">
-                <motion.p
-                    initial={{ opacity: 0, y: 12, filter: "blur(8px)" }}
-                    animate={{ opacity: 1, y: 0, filter: "blur(0)" }}
-                    transition={{ duration: 0.9, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
-                    className="font-mono text-[11px] tracking-[0.4em] uppercase text-cream-dim"
-                >
-                    SOLORA_INTENT_V2 · 169 BYTES · loaded
-                </motion.p>
-                <motion.h1
-                    initial={{ opacity: 0, y: 24, filter: "blur(20px)" }}
-                    animate={{ opacity: 1, y: 0, filter: "blur(0)" }}
-                    transition={{ duration: 1.4, delay: 0.4, ease: [0.16, 1, 0.3, 1] }}
-                    className="font-display mt-5 text-[clamp(64px,12vw,200px)] leading-[0.95] text-cream tracking-tight"
-                >
-                    Solora
-                </motion.h1>
-                <motion.p
+
+            <div className="relative text-center px-6 max-w-4xl">
+                <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
-                    transition={{ duration: 0.9, delay: 1.1 }}
-                    className="mt-3 text-cream-soft text-[14px]"
+                    transition={{ duration: 0.35 }}
+                    className="font-mono text-[clamp(13px,2.4vw,22px)] tracking-[0.16em] uppercase text-cream-dim"
                 >
-                    <em className="font-display italic">cryptographic execution</em> for autonomous AI
-                </motion.p>
+                    <ScrambleText target={SCRAMBLE_TARGET} lock={phase >= 1} />
+                </motion.div>
+
+                <motion.div
+                    initial={{ scaleX: 0, opacity: 0 }}
+                    animate={{
+                        scaleX: phase >= 1 ? 1 : 0,
+                        opacity: phase >= 1 ? 1 : 0,
+                    }}
+                    transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+                    style={{ transformOrigin: "center" }}
+                    className="mx-auto mt-6 h-px w-40 bg-coral/70"
+                />
+
+                <AnimatePresence>
+                    {phase >= 2 && (
+                        <motion.h1
+                            key="wordmark"
+                            initial={{ opacity: 0, y: 32, filter: "blur(24px)" }}
+                            animate={{ opacity: 1, y: 0, filter: "blur(0)" }}
+                            exit={{ opacity: 0 }}
+                            transition={{
+                                duration: 1.2,
+                                ease: [0.16, 1, 0.3, 1],
+                            }}
+                            className="mt-8 text-[clamp(56px,12vw,180px)] leading-[0.95] tracking-tight text-cream"
+                            style={{ fontFamily: "var(--font-display)" }}
+                        >
+                            Solor
+                            <em className="italic text-coral">a</em>
+                        </motion.h1>
+                    )}
+                </AnimatePresence>
+
+                <AnimatePresence>
+                    {phase >= 3 && (
+                        <motion.p
+                            key="tag"
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+                            className="mt-5 text-cream-soft text-[14px] sm:text-[15px]"
+                        >
+                            <em
+                                className="italic"
+                                style={{ fontFamily: "var(--font-display)" }}
+                            >
+                                cryptographic execution
+                            </em>{" "}
+                            for autonomous AI
+                        </motion.p>
+                    )}
+                </AnimatePresence>
             </div>
         </motion.div>
     );

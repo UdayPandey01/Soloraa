@@ -16,6 +16,8 @@ const NAV_LINKS = [
     { href: "/docs", label: "Docs" },
 ] as const;
 
+const SHRINK_SCROLL_PX = 80;
+
 export function Nav() {
     const pathname = usePathname();
     const isLanding = pathname === "/";
@@ -36,86 +38,138 @@ export function Nav() {
     }, [mobileOpen]);
 
     useEffect(() => {
-        if (!isLanding) {
-            setScrolled(true);
-            return;
-        }
-        const onScroll = () => setScrolled(window.scrollY > 80);
+        const onScroll = () => setScrolled(window.scrollY > SHRINK_SCROLL_PX);
         onScroll();
         window.addEventListener("scroll", onScroll, { passive: true });
         return () => window.removeEventListener("scroll", onScroll);
-    }, [isLanding]);
+    }, []);
+
+    const surfaceClass = isLanding
+        ? scrolled
+            ? "bg-black/45 border-white/12"
+            : "bg-transparent border-transparent"
+        : scrolled
+          ? "bg-bg/72 border-line"
+          : "bg-bg/35 border-line/40";
+
+    const textInactive = isLanding && !scrolled
+        ? "text-white/75 hover:text-white"
+        : "text-fg-muted hover:text-fg";
+    const textActive = isLanding && !scrolled ? "text-white" : "text-fg";
 
     return (
-        <motion.header
-            initial={{ opacity: 0, y: -8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, ease: [0.21, 1.02, 0.73, 1] }}
-            className={cn(
-                "sticky top-0 z-50 transition-[background-color,border-color,backdrop-filter] duration-300",
-                isLanding
-                    ? scrolled
-                        ? "border-b border-white/10 bg-black/40 backdrop-blur-xl"
-                        : "border-b border-transparent bg-transparent backdrop-blur-0"
-                    : "border-b border-line/50 bg-bg/80 backdrop-blur-xl"
-            )}
-        >
-            <div className="mx-auto max-w-7xl px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
-                <Link href="/" className="flex items-center gap-2.5 group">
-                    <Logo />
-                    <span className="text-[15px] tracking-tight">
-                        Solor<em className="font-serif italic" style={{ fontFamily: "var(--font-display)" }}>a</em>
+        <header className="sticky top-0 z-50 pointer-events-none">
+            <motion.div
+                initial={{ opacity: 0, y: -8 }}
+                animate={{
+                    opacity: 1,
+                    y: 0,
+                    maxWidth: scrolled ? 820 : 1280,
+                    borderRadius: scrolled ? 9999 : 16,
+                    marginTop: scrolled ? 14 : 0,
+                    paddingLeft: scrolled ? 14 : 20,
+                    paddingRight: scrolled ? 8 : 16,
+                    boxShadow: scrolled
+                        ? "0 20px 60px -28px rgba(0,0,0,0.6), 0 4px 14px -10px rgba(0,0,0,0.4)"
+                        : "0 0 0 transparent",
+                }}
+                transition={{
+                    opacity: { duration: 0.5, ease: [0.21, 1.02, 0.73, 1] },
+                    y: { duration: 0.5, ease: [0.21, 1.02, 0.73, 1] },
+                    maxWidth: { type: "spring", stiffness: 180, damping: 26 },
+                    borderRadius: { type: "spring", stiffness: 180, damping: 26 },
+                    marginTop: { type: "spring", stiffness: 180, damping: 26 },
+                    paddingLeft: { type: "spring", stiffness: 180, damping: 26 },
+                    paddingRight: { type: "spring", stiffness: 180, damping: 26 },
+                    boxShadow: { duration: 0.35 },
+                }}
+                className={cn(
+                    "pointer-events-auto mx-auto w-[calc(100%-1.5rem)] sm:w-[calc(100%-2rem)] flex items-center justify-between gap-3 py-2.5 border backdrop-blur-xl transition-colors duration-300",
+                    surfaceClass
+                )}
+            >
+                <Link href="/" className="flex items-center gap-2.5 group shrink-0">
+                    <Logo invert={isLanding && !scrolled} />
+                    <span
+                        className={cn(
+                            "text-[15px] tracking-tight",
+                            isLanding && !scrolled ? "text-white" : "text-fg"
+                        )}
+                    >
+                        Solor
+                        <em
+                            className="italic"
+                            style={{ fontFamily: "var(--font-display)" }}
+                        >
+                            a
+                        </em>
                     </span>
-                    <span className="hidden sm:inline-flex text-[10px] font-mono uppercase tracking-widest text-fg-dim ml-1">
+                    <motion.span
+                        animate={{ opacity: scrolled ? 0 : 1, width: scrolled ? 0 : "auto" }}
+                        transition={{ duration: 0.2 }}
+                        className={cn(
+                            "hidden sm:inline-flex overflow-hidden whitespace-nowrap text-[10px] font-mono uppercase tracking-widest ml-1",
+                            isLanding && !scrolled ? "text-white/40" : "text-fg-dim"
+                        )}
+                    >
                         sdk v0.2
-                    </span>
+                    </motion.span>
                 </Link>
 
-                <nav className="hidden md:flex items-center gap-1">
+                <nav className="hidden md:flex items-center gap-0.5">
                     {NAV_LINKS.map((link) => {
                         const active =
                             pathname === link.href || pathname.startsWith(`${link.href}/`);
-                        const inactiveText = isLanding
-                            ? "text-white/70 hover:text-white"
-                            : "text-fg-muted hover:text-fg";
-                        const activeText = isLanding ? "text-white" : "text-fg";
                         return (
                             <Link
                                 key={link.href}
                                 href={link.href}
                                 className={cn(
-                                    "relative px-3 py-1.5 text-sm transition-colors",
-                                    active ? activeText : inactiveText
+                                    "relative rounded-full px-3 py-1.5 text-sm transition-colors",
+                                    active ? textActive : textInactive
                                 )}
                             >
-                                {link.label}
                                 {active && (
                                     <motion.span
-                                        layoutId="nav-underline"
+                                        layoutId="nav-pill"
                                         className={cn(
-                                            "absolute inset-x-3 -bottom-[13px] h-px",
-                                            isLanding ? "bg-white" : "bg-fg"
+                                            "absolute inset-0 rounded-full -z-10",
+                                            isLanding && !scrolled
+                                                ? "bg-white/15"
+                                                : "bg-fg/10"
                                         )}
-                                        transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                                        transition={{
+                                            type: "spring",
+                                            stiffness: 340,
+                                            damping: 28,
+                                        }}
                                     />
                                 )}
+                                {link.label}
                             </Link>
                         );
                     })}
                 </nav>
 
-                <div className="flex items-center gap-2">
-                    <WalletButton />
+                <div className="flex items-center gap-2 shrink-0">
+                    <div className={cn(scrolled ? "scale-95" : "scale-100", "transition-transform duration-200")}>
+                        <WalletButton />
+                    </div>
                     <button
                         type="button"
                         onClick={() => setMobileOpen((v) => !v)}
-                        className="md:hidden grid size-9 place-items-center rounded-full border border-line-bright bg-bg-surface text-fg-soft hover:text-fg"
+                        className={cn(
+                            "md:hidden grid size-9 place-items-center rounded-full border transition-colors",
+                            isLanding && !scrolled
+                                ? "border-white/25 text-white/90"
+                                : "border-line-bright bg-bg-surface text-fg-soft hover:text-fg"
+                        )}
                         aria-label={mobileOpen ? "Close menu" : "Open menu"}
                     >
                         {mobileOpen ? <X className="size-4" /> : <Menu className="size-4" />}
                     </button>
                 </div>
-            </div>
+            </motion.div>
 
             <AnimatePresence>
                 {mobileOpen && (
@@ -123,10 +177,10 @@ export function Nav() {
                         initial={{ opacity: 0, y: -4 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -4 }}
-                        transition={{ duration: 0.1, ease: "easeOut" }}
-                        className="md:hidden border-t border-line/60 bg-bg/95 backdrop-blur-xl"
+                        transition={{ duration: 0.15, ease: "easeOut" }}
+                        className="pointer-events-auto mx-auto mt-2 w-[calc(100%-1.5rem)] sm:w-[calc(100%-2rem)] md:hidden rounded-2xl border border-line bg-bg/95 backdrop-blur-xl shadow-[0_20px_60px_-28px_rgba(0,0,0,0.6)]"
                     >
-                        <nav className="mx-auto max-w-7xl px-4 py-3 grid gap-1">
+                        <nav className="px-3 py-2 grid gap-0.5">
                             {NAV_LINKS.map((link) => {
                                 const active =
                                     pathname === link.href ||
@@ -136,7 +190,7 @@ export function Nav() {
                                         key={link.href}
                                         href={link.href}
                                         className={cn(
-                                            "rounded-lg px-3 py-2.5 text-[14px]",
+                                            "rounded-xl px-3 py-2.5 text-[14px]",
                                             active
                                                 ? "bg-bg-raised text-fg"
                                                 : "text-fg-soft hover:bg-bg-surface hover:text-fg"
@@ -150,23 +204,25 @@ export function Nav() {
                     </motion.div>
                 )}
             </AnimatePresence>
-        </motion.header>
+        </header>
     );
 }
 
-function Logo() {
+function Logo({ invert = false }: { invert?: boolean }) {
+    const stroke = invert ? "white" : "hsl(var(--fg))";
+    const fill = invert ? "white" : "hsl(var(--fg))";
     return (
         <span className="relative inline-flex">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <path
                     d="M12 2 L20 7 V17 L12 22 L4 17 V7 Z"
-                    stroke="hsl(var(--fg))"
+                    stroke={stroke}
                     strokeWidth="1.4"
                     strokeLinejoin="round"
                 />
                 <path
                     d="M12 7 L16 9.5 V14.5 L12 17 L8 14.5 V9.5 Z"
-                    fill="hsl(var(--fg))"
+                    fill={fill}
                     fillOpacity="0.18"
                 />
             </svg>

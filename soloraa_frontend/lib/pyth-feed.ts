@@ -3,19 +3,6 @@
 import { useEffect } from "react";
 import { create } from "zustand";
 
-/**
- * Live Pyth Hermes price subscription.
- *
- * Pyth publishes SOL/USDC (and every other feed) over Wormhole; Hermes is
- * the HTTP/SSE gateway in front of that. We open one EventSource per page
- * load, fan it out to every subscriber via a Zustand store, and refcount
- * teardown so the connection closes when the last consumer unmounts.
- *
- * On error, EventSource auto-reconnects. We also enforce a freshness
- * window: if no update lands for STALE_MS, `isLive` flips to false and
- * downstream consumers (strategies, UI) treat the feed as unavailable.
- */
-
 const HERMES_URL =
     process.env.NEXT_PUBLIC_PYTH_HERMES_URL ?? "https://hermes.pyth.network";
 const SOL_USDC_FEED_ID =
@@ -25,17 +12,11 @@ const SOL_USDC_FEED_ID =
 const STALE_MS = 30_000;
 
 export interface PythPriceState {
-    /** SOL price in USDC (e.g. 142.34). null until the first update lands. */
     price: number | null;
-    /** Confidence interval expressed in basis points of the price. */
     confBps: number | null;
-    /** Pyth-side publish timestamp in ms since epoch. */
     publishTimeMs: number | null;
-    /** True iff the feed delivered an update within STALE_MS. */
     isLive: boolean;
-    /** Resolved Hermes URL — surfaced in the UI for trust. */
     source: string;
-    /** Feed ID — surfaced in the UI for trust. */
     feedId: string;
 }
 
@@ -112,19 +93,16 @@ function applyUpdate(raw: string) {
 
 function ensureSubscribed() {
     if (eventSource) return;
-    if (typeof window === "undefined") return; // SSR no-op
+    if (typeof window === "undefined") return;
 
     const url = `${HERMES_URL.replace(/\/$/, "")}/v2/updates/price/stream?ids[]=${SOL_USDC_FEED_ID}&binary=false&parsed=true`;
     try {
         eventSource = new EventSource(url);
     } catch {
-        // EventSource not available (very old browsers); leave isLive false.
         return;
     }
     eventSource.onmessage = (event) => applyUpdate(event.data);
     eventSource.onerror = () => {
-        // EventSource auto-reconnects on error; we just mark stale so the UI
-        // reflects the gap until data resumes.
         markStale();
     };
     resetStaleTimer();
@@ -142,10 +120,6 @@ function teardown() {
     usePythStore.setState(initialState);
 }
 
-/**
- * Subscribe a React component to the live Pyth SOL/USDC feed. The first
- * subscriber opens the EventSource; the last unsubscriber closes it.
- */
 export function usePythPrice(): PythPriceState {
     useEffect(() => {
         refCount += 1;
@@ -161,7 +135,6 @@ export function usePythPrice(): PythPriceState {
     return usePythStore();
 }
 
-/** Read-only snapshot without subscribing. For use inside non-React code. */
 export function getPythSnapshot(): PythPriceState {
     return usePythStore.getState();
 }
