@@ -312,6 +312,13 @@ body {
     backdrop-filter: blur(6px);
 }
 
+@media (hover: none), (pointer: coarse) {
+    .cursor-dot,
+    .cursor-ring {
+        display: none;
+    }
+}
+
 .magnet {
     transition: transform 260ms cubic-bezier(0.16, 1, 0.3, 1);
 }

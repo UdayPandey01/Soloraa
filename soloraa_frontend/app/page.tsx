@@ -7,31 +7,16 @@ import { ArrowRight, ArrowUpRight } from "lucide-react";
 import { AGENTS } from "@/lib/agents";
 import { CustomCursor } from "@/components/landing/custom-cursor";
 
-const OPENING_LS_KEY = "solora.opening.v3.seen";
 const OPENING_MS = 3400;
 
 export default function LandingPage() {
-    const [openingDone, setOpeningDone] = useState<boolean | null>(null);
+    const [openingDone, setOpeningDone] = useState(false);
 
     useEffect(() => {
-        if (typeof window === "undefined") return;
-        const seen = window.localStorage.getItem(OPENING_LS_KEY);
-        setOpeningDone(Boolean(seen));
-    }, []);
-
-    useEffect(() => {
-        if (openingDone === false) {
-            const t = setTimeout(() => {
-                window.localStorage.setItem(OPENING_LS_KEY, "1");
-                setOpeningDone(true);
-            }, OPENING_MS);
-            return () => clearTimeout(t);
-        }
+        if (openingDone) return;
+        const t = setTimeout(() => setOpeningDone(true), OPENING_MS);
+        return () => clearTimeout(t);
     }, [openingDone]);
-
-    if (openingDone === null) {
-        return <div className="landing min-h-screen" aria-hidden />;
-    }
 
     return (
         <div className="landing relative">
@@ -67,9 +52,9 @@ function ScrambleText({
     lock: boolean;
 }) {
     const [chars, setChars] = useState<string[]>(() =>
-        target.split("").map(
-            () => SCRAMBLE_CHARS[Math.floor(Math.random() * SCRAMBLE_CHARS.length)]!
-        )
+        target
+            .split("")
+            .map((_, i) => SCRAMBLE_CHARS[i % SCRAMBLE_CHARS.length]!)
     );
     const [lockedCount, setLockedCount] = useState(0);
 
