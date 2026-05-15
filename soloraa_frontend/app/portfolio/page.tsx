@@ -18,6 +18,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody } from "@/components/ui/card";
+import { PageHeroBackdrop } from "@/components/page-hero-backdrop";
 import { AGENTS, formatUsdc } from "@/lib/agents";
 import { CLUSTER } from "@/lib/solora";
 import {
@@ -125,12 +126,23 @@ export default function PortfolioPage() {
 
     if (!connected || !walletPubkey) {
         return (
-            <div className="mx-auto max-w-3xl px-4 sm:px-6 pt-16 sm:pt-20 pb-20">
-                <Badge>Portfolio</Badge>
-                <h1 className="mt-4 sm:mt-5 text-display-2 text-fg text-balance">
-                    Connect a wallet to load your portfolio.
+            <div className="relative mx-auto max-w-3xl px-4 sm:px-6 pt-16 sm:pt-20 pb-20 overflow-hidden">
+                <PageHeroBackdrop />
+                <p className="relative inline-flex items-center gap-2 font-mono text-[11px] tracking-[0.32em] uppercase text-fg-dim">
+                    <span
+                        className="inline-flex size-1.5 rounded-full animate-pulse"
+                        style={{ background: "hsl(var(--accent))" }}
+                    />
+                    Portfolio · {CLUSTER}
+                </p>
+                <h1
+                    className="mt-5 sm:mt-6 text-[clamp(40px,7vw,84px)] leading-[0.98] tracking-tight text-fg"
+                    style={{ fontFamily: "var(--font-display)" }}
+                >
+                    Connect a wallet to{" "}
+                    <em className="italic text-fg-soft">load your portfolio.</em>
                 </h1>
-                <p className="mt-4 sm:mt-5 text-[15px] sm:text-[17px] leading-[1.55] text-fg-muted">
+                <p className="mt-6 text-[15px] sm:text-[17px] leading-[1.6] text-fg-muted">
                     Soloraa pulls your live SOL balance and recent confirmed
                     transactions from Solana {CLUSTER}, plus every agent run you've
                     executed in this browser (delegation receipt + leg signatures).
@@ -151,11 +163,21 @@ export default function PortfolioPage() {
     }
 
     return (
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 pt-12 sm:pt-16 pb-20 sm:pb-24 lg:pt-20">
-            <header className="flex flex-wrap items-end justify-between gap-6 border-b border-line pb-8 sm:pb-10">
+        <div className="relative mx-auto max-w-7xl px-4 sm:px-6 pt-12 sm:pt-16 pb-20 sm:pb-24 lg:pt-20 overflow-hidden">
+            <PageHeroBackdrop />
+            <header className="relative flex flex-wrap items-end justify-between gap-6 border-b border-line pb-8 sm:pb-10">
                 <div>
-                    <Badge>Portfolio</Badge>
-                    <h1 className="mt-4 sm:mt-5 text-display-2 text-fg break-all">
+                    <p className="inline-flex items-center gap-2 font-mono text-[11px] tracking-[0.32em] uppercase text-fg-dim">
+                        <span
+                            className="inline-flex size-1.5 rounded-full animate-pulse"
+                            style={{ background: "hsl(var(--accent))" }}
+                        />
+                        Portfolio
+                    </p>
+                    <h1
+                        className="mt-4 sm:mt-5 text-[clamp(40px,7vw,84px)] leading-[0.98] tracking-tight text-fg break-all"
+                        style={{ fontFamily: "var(--font-display)" }}
+                    >
                         {walletPubkey.slice(0, 4)}…{walletPubkey.slice(-4)}
                     </h1>
                     <p className="mt-2 sm:mt-3 text-[13px] sm:text-[14px] text-fg-muted font-mono break-all">

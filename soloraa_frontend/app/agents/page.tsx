@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { AgentCard } from "@/components/agent-card";
+import { PageHeroBackdrop } from "@/components/page-hero-backdrop";
 import { AGENTS, type AgentRisk } from "@/lib/agents";
 import { cn } from "@/lib/cn";
 
@@ -17,9 +18,14 @@ export default function AgentsPage() {
     }, [filter]);
 
     return (
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 pt-12 sm:pt-16 pb-20 sm:pb-24 lg:pt-20">
-            <header className="max-w-3xl">
-                <p className="font-mono text-[11px] tracking-[0.32em] uppercase text-fg-dim">
+        <div className="relative mx-auto max-w-7xl px-4 sm:px-6 pt-12 sm:pt-16 pb-20 sm:pb-24 lg:pt-20 overflow-hidden">
+            <PageHeroBackdrop />
+            <header className="relative max-w-3xl">
+                <p className="inline-flex items-center gap-2 font-mono text-[11px] tracking-[0.32em] uppercase text-fg-dim">
+                    <span
+                        className="inline-flex size-1.5 rounded-full animate-pulse"
+                        style={{ background: "hsl(var(--accent))" }}
+                    />
                     Catalogue · attested agents
                 </p>
                 <h1

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ArrowRight, Box, Cpu, Webhook } from "lucide-react";
 import { Card, CardBody } from "@/components/ui/card";
 import { CodeBlock, InlineCode } from "@/components/ui/code";
+import { PageHeroBackdrop } from "@/components/page-hero-backdrop";
 
 export const metadata: Metadata = {
     title: "Developers",
@@ -12,9 +13,14 @@ export const metadata: Metadata = {
 
 export default function DevelopersPage() {
     return (
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 pt-12 sm:pt-16 pb-20 sm:pb-24 lg:pt-20">
-            <header className="max-w-3xl">
-                <p className="font-mono text-[11px] tracking-[0.32em] uppercase text-fg-dim">
+        <div className="relative mx-auto max-w-7xl px-4 sm:px-6 pt-12 sm:pt-16 pb-20 sm:pb-24 lg:pt-20 overflow-hidden">
+            <PageHeroBackdrop />
+            <header className="relative max-w-3xl">
+                <p className="inline-flex items-center gap-2 font-mono text-[11px] tracking-[0.32em] uppercase text-fg-dim">
+                    <span
+                        className="inline-flex size-1.5 rounded-full animate-pulse"
+                        style={{ background: "hsl(var(--ok))" }}
+                    />
                     SDK · v0.2.0 · published
                 </p>
                 <h1

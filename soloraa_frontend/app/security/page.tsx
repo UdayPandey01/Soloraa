@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
 import { Hash, Lock, KeyRound, LayoutList, ShieldCheck } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardBody } from "@/components/ui/card";
 import { CodeBlock, InlineCode } from "@/components/ui/code";
 import { IntentBytes } from "@/components/intent-bytes";
 import { Solution } from "@/components/solution";
+import { PageHeroBackdrop } from "@/components/page-hero-backdrop";
 
 export const metadata: Metadata = {
     title: "Security",
@@ -53,13 +53,24 @@ const GUARANTEES = [
 export default function SecurityPage() {
     return (
         <div>
-            <section className="mx-auto max-w-7xl px-4 sm:px-6 pt-12 sm:pt-16 pb-10 sm:pb-12 lg:pt-20">
-                <header className="max-w-3xl">
-                    <Badge>Security</Badge>
-                    <h1 className="mt-5 text-display-2 text-fg text-balance">
-                        Guarantees that map to code.
+            <section className="relative mx-auto max-w-7xl px-4 sm:px-6 pt-12 sm:pt-16 pb-10 sm:pb-12 lg:pt-20 overflow-hidden">
+                <PageHeroBackdrop />
+                <header className="relative max-w-3xl">
+                    <p className="inline-flex items-center gap-2 font-mono text-[11px] tracking-[0.32em] uppercase text-fg-dim">
+                        <span
+                            className="inline-flex size-1.5 rounded-full animate-pulse"
+                            style={{ background: "hsl(var(--accent))" }}
+                        />
+                        Trust model · audited surface
+                    </p>
+                    <h1
+                        className="mt-5 sm:mt-6 text-[clamp(40px,7vw,88px)] leading-[0.98] tracking-tight text-fg"
+                        style={{ fontFamily: "var(--font-display)" }}
+                    >
+                        Guarantees that{" "}
+                        <em className="italic text-fg-soft">map to code.</em>
                     </h1>
-                    <p className="mt-5 text-[17px] leading-[1.55] text-fg-muted">
+                    <p className="mt-6 text-[16px] sm:text-[17px] leading-[1.6] text-fg-muted">
                         Every constraint Soloraa enforces is a specific check in the
                         Anchor program with a typed error code. The list below is the
                         whole list. If a property isn't on it, the program doesn't

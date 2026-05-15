@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Badge } from "@/components/ui/badge";
 import { CodeBlock, InlineCode } from "@/components/ui/code";
 
 export const metadata: Metadata = {
@@ -42,11 +41,16 @@ export default function DocsPage() {
 
                 <article className="space-y-16 max-w-3xl">
                     <header>
-                        <Badge>SDK reference</Badge>
-                        <h1 className="mt-5 text-display-2 text-fg">
-                            @soloraa/sdk
+                        <p className="font-mono text-[11px] tracking-[0.32em] uppercase text-fg-dim">
+                            SDK · v0.2.0 · reference
+                        </p>
+                        <h1
+                            className="mt-5 text-[clamp(36px,6vw,72px)] leading-[0.98] tracking-tight text-fg"
+                            style={{ fontFamily: "var(--font-display)" }}
+                        >
+                            <em className="italic text-fg-soft">@</em>soloraaa<em className="italic text-fg-soft">/</em>sdk
                         </h1>
-                        <p className="mt-4 text-[15px] leading-[1.6] text-fg-muted">
+                        <p className="mt-5 text-[15px] sm:text-[16px] leading-[1.6] text-fg-muted">
                             A thin TypeScript client over the Soloraa enclave HTTP API
                             and the on-chain program. Submits structured intents, returns
                             verified results, exposes a streaming surface for long
@@ -56,10 +60,10 @@ export default function DocsPage() {
 
                     <Section id="quickstart" title="Quickstart">
                         <CodeBlock title="install" language="bash">
-{`npm install @soloraa/sdk @solana/web3.js`}
+{`npm install @soloraaa/sdk @solana/web3.js`}
                         </CodeBlock>
                         <CodeBlock title="my-agent.ts" language="ts" className="mt-3">
-{`import { SoloraaClient } from "@soloraa/sdk";
+{`import { SoloraaClient } from "@soloraaa/sdk";
 
 const client = new SoloraaClient({
     rpcUrl: "https://api.devnet.solana.com",

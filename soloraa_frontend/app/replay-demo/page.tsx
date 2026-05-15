@@ -3,9 +3,9 @@
 import { useState, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Play, RotateCcw, ShieldCheck, X, Check } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody } from "@/components/ui/card";
+import { PageHeroBackdrop } from "@/components/page-hero-backdrop";
 import { CodeBlock, InlineCode } from "@/components/ui/code";
 import { cn } from "@/lib/cn";
 
@@ -49,15 +49,21 @@ export default function ReplayDemoPage() {
     }, []);
 
     return (
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 pt-12 sm:pt-16 pb-20 sm:pb-24 lg:pt-20">
-            <header className="max-w-3xl">
-                <Badge tone="danger" dotted>
-                    Threat demo
-                </Badge>
-                <h1 className="mt-5 text-display-2 text-fg text-balance">
-                    A captured signature shouldn't move money twice.
+        <div className="relative mx-auto max-w-7xl px-4 sm:px-6 pt-12 sm:pt-16 pb-20 sm:pb-24 lg:pt-20 overflow-hidden">
+            <PageHeroBackdrop tone="danger" />
+            <header className="relative max-w-3xl">
+                <p className="inline-flex items-center gap-2 font-mono text-[11px] tracking-[0.32em] uppercase text-danger">
+                    <span className="inline-flex size-1.5 rounded-full bg-danger animate-pulse" />
+                    Threat demo · live
+                </p>
+                <h1
+                    className="mt-5 sm:mt-6 text-[clamp(40px,7vw,84px)] leading-[0.98] tracking-tight text-fg"
+                    style={{ fontFamily: "var(--font-display)" }}
+                >
+                    A captured signature{" "}
+                    <em className="italic text-fg-soft">shouldn't move money twice.</em>
                 </h1>
-                <p className="mt-5 text-[17px] leading-[1.55] text-fg-muted">
+                <p className="mt-6 text-[16px] sm:text-[17px] leading-[1.6] text-fg-muted">
                     A compromised relayer, a man-in-the-middle, an old log archive — any
                     of them can resurface a previously-valid signed intent. Soloraa binds
                     each signature to the wallet's nonce. The chain checks. The chain
