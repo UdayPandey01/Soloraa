@@ -145,15 +145,44 @@ function Hero() {
                 <span className="mesh-indigo" />
             </div>
 
-            {/* HERO IMAGE/VIDEO SLOT.
-                If you drop a file at /public/hero/crystal.webm (or .mp4 / .jpg),
-                uncomment one of the lines below to use it as the background. */}
-            {/*
-            <video autoPlay muted loop playsInline className="absolute inset-0 w-full h-full object-cover opacity-50">
-                <source src="/hero/crystal.webm" type="video/webm" />
+            {/* Hero asset — video on desktop (with poster fallback to the still),
+                still-image on mobile (where autoplay-loop is unreliable + saves
+                bandwidth). The transform crops the Veo watermark off the bottom
+                of the video; the corner gradient below is a safety net. */}
+            <video
+                autoPlay
+                muted
+                loop
+                playsInline
+                preload="auto"
+                poster="/obsidian.png"
+                className="hidden md:block absolute inset-0 w-full h-full object-cover opacity-55 pointer-events-none"
+                style={{
+                    transform: "scale(1.08) translateY(-1.8%)",
+                    transformOrigin: "center center",
+                }}
+            >
+                <source src="/videomp_.mp4" type="video/mp4" />
             </video>
-            <img src="/hero/crystal.jpg" alt="" className="absolute inset-0 w-full h-full object-cover opacity-55" />
-            */}
+            <img
+                src="/obsidian.png"
+                alt=""
+                className="md:hidden absolute inset-0 w-full h-full object-cover opacity-55 pointer-events-none"
+                style={{
+                    transform: "scale(1.06)",
+                    transformOrigin: "center center",
+                }}
+            />
+            {/* Watermark cover — fades the bottom-right corner into ink, just
+                in case the transform crop leaves any sliver of the Veo logo. */}
+            <div
+                aria-hidden
+                className="absolute right-0 bottom-0 w-[260px] h-[110px] pointer-events-none z-[2]"
+                style={{
+                    background:
+                        "radial-gradient(ellipse at bottom right, hsl(var(--ink)) 0%, hsl(var(--ink) / 0.85) 35%, transparent 75%)",
+                }}
+            />
 
             <motion.div
                 style={{ y: heroY, opacity: heroOpacity }}
