@@ -5,7 +5,7 @@
 # local attestation server at SOLORA_OYSTER_ATTEST_URL (default
 # http://127.0.0.1:1300) for the platform attestation document.
 
-FROM rust:1.83-slim-bookworm AS builder
+FROM rust:1.88-slim-bookworm AS builder
 WORKDIR /build
 
 RUN apt-get update \
