@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "ops": "tsx solora_relayer/ops.ts",
+    "server": "tsx solora_relayer/server.ts",
     "registry:init": "tsx solora_relayer/ops.ts init-registry",
     "registry:add": "tsx solora_relayer/ops.ts add-measurement",
     "registry:revoke": "tsx solora_relayer/ops.ts revoke-measurement",
