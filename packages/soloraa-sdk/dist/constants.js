@@ -1,10 +1,6 @@
-/**
- * Protocol constants the SDK and on-chain program agree on byte-for-byte.
- * If you change one of these, you change the on-chain verifier too.
- */
 export const INTENT_DOMAIN = "SOLORA_INTENT_V2";
 export const SOLORA_INTENT_V2_BYTES = 169;
-/** Offsets of every field within the 169-byte canonical message. */
+export const DEFAULT_RELAYER_URL = "https://relayer.soloraa.tech";
 export const INTENT_OFFSETS = {
     domain: 0,
     programId: 16,
@@ -16,14 +12,10 @@ export const INTENT_OFFSETS = {
     kind: 136,
     payloadHash: 137,
 };
-/** Intent kind tags written at offset 136. */
 export const INTENT_KIND = {
     transfer: 0,
-    swap: 1,
-    lend: 2,
-    cpi: 3,
+    arbitraryCpi: 1,
 };
-/** Mirrors `programs/solora/src/error.rs`. */
 export const ERROR_NAMES = {
     6000: "WalletPaused",
     6017: "EnclaveSignerMismatch",
@@ -37,11 +29,6 @@ export const ERROR_NAMES = {
     6045: "AttestationMeasurementMismatch",
     6046: "AttestationGovernorMismatch",
 };
-/**
- * Doc URLs surfaced on every SoloraaExecutionError. When a transaction is
- * rejected by the on-chain verifier, the SDK includes the right page so
- * an operator can fix it without grepping the codebase.
- */
 const DOCS_BASE = "https://docs.soloraa.dev/errors";
 export const ERROR_DOCS = {
     6000: `${DOCS_BASE}/wallet-paused`,

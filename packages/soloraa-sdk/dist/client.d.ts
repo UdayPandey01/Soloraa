@@ -1,56 +1,33 @@
-import { PublicKey } from "@solana/web3.js";
-import type { ExecutionIntent, ExecutionResult, ExecutionStreamEvent, SoloraaClientConfig, StreamOpts, VerifyIntentInput, VerifyResult } from "./types.js";
-/**
- * Soloraa client. Holds the three endpoints it needs and the wallet PDA it
- * acts on behalf of. The client never holds a private key — every signature
- * comes from the attested enclave service.
- */
+import type { ExecutionResult, RelayerHealth, RelayerKeys, SoloraaClientConfig, TransferRequest, VerifyIntentInput, VerifyResult } from "./types.js";
 export declare class SoloraaClient {
-    private readonly conn;
-    private readonly enclaveUrl;
-    private readonly walletPda;
-    private readonly cuLimit;
-    private readonly expirySlotsAhead;
-    private readonly relayer?;
-    constructor(config: SoloraaClientConfig);
+    private readonly relayerUrl;
+    private readonly walletAuthority?;
+    private readonly agentId?;
+    private readonly fetchImpl;
+    constructor(config?: SoloraaClientConfig);
     /**
-     * Submit an intent, get the confirmed transaction back. Blocks until
-     * Solana reaches `confirmed` commitment on the result.
+     * Ask the relayer to ask the enclave to sign a transfer intent, then
+     * submit it on chain through the program's `execute_transfer` instruction.
      */
-    execute(intent: ExecutionIntent): Promise<ExecutionResult>;
+    executeTransfer(req: TransferRequest): Promise<ExecutionResult>;
+    /** Liveness check. Returns the relayer's program ID + cluster. */
+    health(): Promise<RelayerHealth>;
+    /** Returns the relayer's fee-payer pubkey and the live enclave pubkey. */
+    keys(): Promise<RelayerKeys>;
     /**
-     * Re-derive the canonical message from raw bytes and run light validation.
-     * Useful for tooling that observes intents without broadcasting. Note: a
-     * full re-verification matches the on-chain rules; this function checks
-     * structure, the domain prefix, message length, and the signature against
-     * the supplied pubkey.
+     * Locally re-verify a (message, signature, pubkey) triple. Runs a real
+     * Ed25519 check via @noble/ed25519; never trusts the enclave's word.
+     *
+     * Useful for replay tooling, audit logs, and observability pipelines
+     * that want to validate signed bytes off the critical path.
      */
     verifyIntent(input: VerifyIntentInput): Promise<VerifyResult>;
-    /**
-     * Subscribe to the seven-stage execution lifecycle for an in-flight run.
-     * Backed by Server-Sent Events from /api/agent/run on the host.
-     */
-    stream(opts: StreamOpts): AsyncIterable<ExecutionStreamEvent>;
-    private buildEnclaveRequest;
-    private dispatchToEnclave;
-    private buildWrappingTx;
-    /**
-     * Real Ed25519 verification of (message, signature, pubkey) using the
-     * pure-JS @noble/ed25519 implementation. Runs entirely client-side;
-     * never trusts the enclave's word on its own signature.
-     *
-     * Returns true iff the signature was produced by `pubkey` over `message`.
-     * Returns false on any malformed input rather than throwing — the caller
-     * decides how to surface the rejection.
-     */
     private verifyEd25519;
-    private extractErrorCode;
-    readonly sysvarInstructions: PublicKey;
 }
 export declare class SoloraaExecutionError extends Error {
     readonly code: number | undefined;
-    readonly name_: string | undefined;
-    readonly docUrl?: string | undefined;
-    constructor(code: number | undefined, name_: string | undefined, message: string, docUrl?: string | undefined);
+    readonly errorName: string | undefined;
+    readonly docUrl?: string;
+    constructor(code: number | undefined, errorName: string | undefined, message: string, docUrl?: string);
 }
 //# sourceMappingURL=client.d.ts.map

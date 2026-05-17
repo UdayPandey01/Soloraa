@@ -2,169 +2,179 @@
 
 Cryptographic execution layer for autonomous AI agents on Solana.
 
-Submit structured intents to an attested enclave; on-chain verification rejects
-anything that doesn't match the wallet's policy. The agent (and this SDK) never
-hold a private key — every signature is produced inside the TEE.
+Submit intents to an attested enclave; on-chain verification rejects anything
+that doesn't match the wallet's policy. Your bot never holds a private key —
+every signature is produced inside the TEE.
 
 ```bash
 npm install @soloraaa/sdk @solana/web3.js
 ```
 
+## Five-line bot
+
+The SDK defaults to the public hosted relayer at
+`https://relayer.soloraa.tech` (devnet). No keys to generate, no enclave to
+deploy.
+
+```ts
+import { Keypair } from "@solana/web3.js";
+import { SoloraaClient } from "@soloraaa/sdk";
+
+const client = new SoloraaClient();
+
+const result = await client.executeTransfer({
+    destination: Keypair.generate().publicKey.toBase58(),
+    amountLamports: 2_000_000,
+});
+
+console.log(result.explorerUrl);
+```
+
+Run it:
+
+```bash
+npx tsx examples/run-bot.ts
+```
+
+You'll get a real devnet transaction signed inside an enclave, verified
+on-chain by program `8tkBctMGe5CsGQ731t9di9hBjGg7rbMo4VEk8WujvTPS`, with a
+nonce-bound replay guard.
+
 ## How it works
 
 ```
-your agent ──► SoloraaClient ──► enclave (TEE) ──► Solana program
-                                  ┊ sealed Ed25519 key
-                                  ┊ signs a 169-byte
-                                  ┊ SOLORA_INTENT_V2 message
-                                                          │
-                              re-verifies every field on-chain
-                              (nonce, expiry, blockhash, payload, allowlist)
+your bot ──► SoloraaClient.executeTransfer()
+                 │
+                 │ HTTPS POST /execute-cycle
+                 ▼
+            hosted relayer
+                 │
+                 │ POST /sign-transfer-intent
+                 ▼
+            enclave (Marlin Oyster CVM in production / Docker container today)
+                 │ sealed Ed25519 key inside the TEE
+                 │ verifies on-chain wallet state, builds canonical 169-byte
+                 │ SOLORA_INTENT_V2 message, signs it
+                 ▼
+            relayer assembles Ed25519Program + execute_transfer ix
+                 │
+                 ▼
+            Solana program — re-verifies signer, nonce, blockhash, expiry,
+            payload hash. Rejects on any mismatch.
+                 │
+                 ▼
+            confirmed tx, nonce bumped, funds moved
 ```
 
-The client holds no signing authority over funds. The optional
-`relayerKeypair` only pays the wrapping transaction's fee.
+The client holds no signing authority over funds. Even the relayer's keypair
+is just the fee payer — the wallet PDA is owned by the on-chain program and
+can only be moved by a verified enclave signature.
 
-## Quick start
+## Configuration
+
+| Option | Default | What it's for |
+|---|---|---|
+| `relayerUrl` | `https://relayer.soloraa.tech` | Point at your own relayer for self-hosted deployments |
+| `walletAuthority` | (relayer default) | Pubkey whose wallet PDA the cycles act through. Default uses the hosted relayer's demo wallet. |
+| `agentId` | undefined | Free-form tag stamped on each request for log correlation |
+| `fetchImpl` | global `fetch` | Inject a custom fetch (useful for retries, mocks, browser polyfills) |
 
 ```ts
-import { Keypair, PublicKey } from "@solana/web3.js";
-import { SoloraaClient } from "@soloraaa/sdk";
-
+// Self-hosted: your own relayer + your own wallet PDA authority
 const client = new SoloraaClient({
-    rpcUrl: "https://api.devnet.solana.com",
-    enclaveUrl: "https://enclave.your-deployment.example",
-    walletPda: new PublicKey("EccZ...BWrb"),
-    relayerKeypair: Keypair.fromSecretKey(/* fee payer only */),
-});
-
-const result = await client.execute({
-    action: "transfer",
-    destination: "9aT...VyP",
-    amount: 1_000_000n, // lamports
-});
-
-console.log(result.signature);   // confirmed devnet tx
-console.log(result.walletNonce); // bumped on-chain nonce
-console.log(result.bytesSigned); // 169-byte canonical message
-```
-
-## Intent types
-
-```ts
-type ExecutionIntent =
-    | TransferIntent
-    | SwapIntent       // Jupiter
-    | LendIntent       // Kamino / MarginFi / Solend
-    | ArbitraryCpiIntent;
-```
-
-Every intent is constrained by the wallet's on-chain `Policy` (max trade size,
-slippage cap, allowed programs, allowed tokens). The enclave refuses to sign
-anything outside those bounds; the program refuses to execute anything the
-enclave didn't sign.
-
-```ts
-// Swap example
-await client.execute({
-    action: "swap",
-    protocol: "jupiter",
-    inputMint: "So11111111111111111111111111111111111111112",
-    outputMint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
-    amount: 250_000_000n,
-    constraints: { maxSlippageBps: 50 },
+    relayerUrl: "https://relayer.my-deployment.com",
+    walletAuthority: "B4D6yHTXc5diqG1qktTSCzWAgG2nPbMMm9HaLAYYWnqb",
+    agentId: "market-maker-1",
 });
 ```
 
-## Streaming execution lifecycle
+## API
+
+### `new SoloraaClient(config?: SoloraaClientConfig)`
+
+Construct a client. All fields are optional — the default points at the
+hosted relayer.
+
+### `client.executeTransfer(req: TransferRequest): Promise<ExecutionResult>`
+
+Sign + submit a transfer cycle. Throws `SoloraaExecutionError` on on-chain
+rejection (with `code`, `errorName`, `docUrl` set).
 
 ```ts
-for await (const event of client.stream({ runId })) {
-    // stages: intent → policy → oracle → build → sign → broadcast → verify
-    console.log(event.stage, event);
-}
+type TransferRequest = {
+    destination: string | PublicKey;
+    amountLamports: bigint | number;
+    cycle?: number;
+};
+
+type ExecutionResult = {
+    signature: string;
+    explorerUrl: string;
+    nonceBefore: string;
+    cycle?: number;
+};
 ```
 
-The seven-stage pipeline mirrors what the protocol does end-to-end:
+> **Amount minimum.** Solana requires receiving accounts to maintain a
+> rent-exempt balance (~890,880 lamports for a system account). Sending less
+> than this to an *uninitialized* destination fails preflight. Either reuse a
+> destination that already has SOL, or send ≥ 2,000,000 lamports.
 
-| Stage | What happens |
-|---|---|
-| `intent` | Agent submits a structured action. |
-| `policy` | Pause flag, trade-size cap, slippage cap, allowlist evaluated. |
-| `oracle` | Pyth update fetched; Wormhole guardian quorum + merkle proof verified inside the enclave. |
-| `build` | Canonical 169-byte `SOLORA_INTENT_V2` message assembled. |
-| `sign` | Sealed Ed25519 key inside the TEE produces a 64-byte signature. |
-| `broadcast` | Ed25519 verify ix at index 0; execute ix at index 1. |
-| `verify` | On-chain program re-checks every field and bumps `wallet.nonce`. |
+### `client.verifyIntent(input: VerifyIntentInput): Promise<VerifyResult>`
 
-## Verifying an intent without broadcasting
+Locally re-verify a `(message, signature, pubkey)` triple via
+`@noble/ed25519`. Never trusts the enclave's word; runs entirely in the
+caller's process. Useful for replay tooling, audit logs, observers.
 
 ```ts
-import { SoloraaClient, SOLORA_INTENT_V2_BYTES } from "@soloraaa/sdk";
-
-const result = await client.verifyIntent({
-    message,     // 169-byte Uint8Array
-    signature,   // 64-byte Ed25519 signature
-    enclavePubkey: "8f...J3",
+const r = await client.verifyIntent({
+    message,        // 169-byte Uint8Array
+    signature,      // 64-byte Ed25519 signature
+    enclavePubkey,  // base58
 });
-
-if (result.ok) {
-    console.log(result.fields.nonce, result.fields.payloadHash);
-}
+if (r.ok) console.log(r.fields.nonce, r.fields.payloadHash);
 ```
 
-## Error codes
+### `client.health()`, `client.keys()`
 
-The SDK throws `SoloraaExecutionError` when the on-chain program rejects a
-transaction. The code maps to the program's Anchor error enum:
+Lightweight diagnostics. `health()` returns `{status, programId, cluster}`.
+`keys()` returns `{authority, enclavePubkey}` — the latter is the *live*
+enclave signer, fetched fresh from the relayer.
 
-| Code | Name |
-|---|---|
-| 6017 | `EnclaveSignerMismatch` |
-| 6018 | `IntentNonceMismatch` |
-| 6019 | `IntentExpired` |
-| 6020 | `IntentKindMismatch` |
-| 6021 | `IntentPayloadMismatch` |
-| 6027 | `TargetProgramNotAllowed` |
-| 6033 | `BlockhashMismatch` |
-| 6037 | `MeasurementRevoked` |
-| 6045 | `AttestationMeasurementMismatch` |
-| 6046 | `AttestationGovernorMismatch` |
-
-Every thrown `SoloraaExecutionError` carries a `docUrl` pointing at the
-matching page in the error catalogue.
+## Errors
 
 ```ts
 import { SoloraaExecutionError } from "@soloraaa/sdk";
 
 try {
-    await client.execute(intent);
+    await client.executeTransfer({ destination, amountLamports: 2_000_000 });
 } catch (err) {
     if (err instanceof SoloraaExecutionError) {
-        console.error(err.code, err.name_, err.message);
-        // err.docUrl → https://docs.soloraa.dev/errors/intent-nonce-mismatch
+        console.error(err.code, err.errorName, err.docUrl);
+        // 6018, IntentNonceMismatch, https://docs.soloraa.dev/errors/intent-nonce-mismatch
     }
 }
 ```
 
-## Intent verification
+Common codes:
 
-`client.verifyIntent(...)` performs a **real Ed25519 signature check** using
-`@noble/ed25519` — never trusts the enclave's claim of its own signature.
-Useful for observing pipelines that want to validate signed bytes off the
-critical path.
+| Code | Name | Cause |
+|---|---|---|
+| 6017 | EnclaveSignerMismatch | Wallet PDA's `enclave_signer` field doesn't match the signing key — usually after redeploying the enclave |
+| 6018 | IntentNonceMismatch | Out-of-order or replayed intent. Refresh and retry. |
+| 6019 | IntentExpired | `expiry_slot` passed before broadcast. Network was slow; retry. |
+| 6027 | TargetProgramNotAllowed | Trying to invoke a CPI target not in the wallet's allowlist. |
+| 6033 | BlockhashMismatch | Blockhash referenced in the intent isn't in the slot-hashes sysvar. |
 
-```ts
-const result = await client.verifyIntent({
-    message,     // 169-byte Uint8Array
-    signature,   // 64-byte Ed25519 signature
-    enclavePubkey: "8f...J3",
-});
+Every thrown error carries the matching `docUrl` for one-click context.
 
-if (result.ok) {
-    console.log(result.fields.nonce, result.fields.payloadHash);
-}
-```
+## Self-hosting the relayer + enclave
+
+The hosted relayer is fine for demos and single-tenant trials, but for real
+production you should deploy your own. See
+[`PRODUCTION_CUTOVER.md`](https://github.com/uday/solora/blob/master/PRODUCTION_CUTOVER.md)
+in the main repo — it walks the four phases (local end-to-end → Marlin
+Oyster CVM → real Jupiter swap intents → mainnet).
 
 ## Constants
 
@@ -172,23 +182,14 @@ if (result.ok) {
 import {
     SOLORA_INTENT_V2_BYTES, // 169
     INTENT_DOMAIN,           // "SOLORA_INTENT_V2"
+    INTENT_OFFSETS,          // field-by-field byte offsets
+    INTENT_KIND,             // { transfer: 0, arbitraryCpi: 1 }
+    DEFAULT_RELAYER_URL,     // "https://relayer.soloraa.tech"
 } from "@soloraaa/sdk";
 ```
 
 These are byte-for-byte mirrored by the on-chain verifier. Changing one
 changes the program.
-
-## API surface
-
-```ts
-class SoloraaClient {
-    constructor(config: SoloraaClientConfig);
-    execute(intent: ExecutionIntent): Promise<ExecutionResult>;
-    verifyIntent(input: VerifyIntentInput): Promise<VerifyResult>;
-    stream(opts: StreamOpts): AsyncIterable<ExecutionStreamEvent>;
-    readonly sysvarInstructions: PublicKey;
-}
-```
 
 ## License
 

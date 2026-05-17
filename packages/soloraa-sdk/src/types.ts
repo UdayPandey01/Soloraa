@@ -1,92 +1,48 @@
-/**
- * Public type surface of @soloraa/sdk.
- *
- * Every type lives in this file so library consumers and tools (Zod schemas,
- * docs generators, OpenAPI translations) have a single source of truth.
- */
-
-import type { PublicKey, Keypair } from "@solana/web3.js";
-
-// ── Client configuration ─────────────────────────────────────────────────────
+import type { PublicKey } from "@solana/web3.js";
 
 export interface SoloraaClientConfig {
-    /** Solana RPC endpoint. The client uses confirmed commitment by default. */
-    rpcUrl: string;
-    /** Base URL of the enclave HTTP service (e.g. http://127.0.0.1:8080). */
-    enclaveUrl: string;
-    /** Wallet PDA the client acts on behalf of (base58). */
-    walletPda: string | PublicKey;
-    /** Optional relayer keypair used to sign and pay for the wrapping tx. */
-    relayerKeypair?: Keypair;
     /**
-     * Number of slots ahead of `getSlot('confirmed')` the signed intent's
-     * expiry is set to. Default 60 (~25s on devnet). Minimum 5.
+     * Relayer URL. Defaults to the hosted public relayer at
+     * https://relayer.soloraa.tech (single-tenant demo wallet). For real
+     * production use, deploy your own relayer and point the SDK at it.
      */
-    expirySlotsAhead?: number;
-    /** Compute unit limit prepended to the tx. Default 200_000. */
-    cuLimit?: number;
+    relayerUrl?: string;
+    /**
+     * Optional. When set, every execute call routes through the wallet PDA
+     * derived from this authority pubkey. When unset, the relayer falls back
+     * to its own default authority (hosted relayer demo behaviour).
+     */
+    walletAuthority?: string | PublicKey;
+    /**
+     * Optional. Tag stamped onto every request for the relayer's logs. Useful
+     * for distinguishing one consumer of the same relayer from another.
+     */
+    agentId?: string;
+    /**
+     * Optional. fetch implementation override. Defaults to the global fetch.
+     */
+    fetchImpl?: typeof fetch;
 }
 
-// ── Intent inputs ────────────────────────────────────────────────────────────
-
-export type ExecutionIntent =
-    | TransferIntent
-    | SwapIntent
-    | LendIntent
-    | ArbitraryCpiIntent;
-
-export interface TransferIntent {
-    action: "transfer";
+export interface TransferRequest {
+    /** Recipient pubkey (base58 or PublicKey instance). */
     destination: string | PublicKey;
-    /** Amount in lamports. */
-    amount: bigint;
+    /** Amount in lamports. Minimum ~890,880 to keep the destination rent-exempt. */
+    amountLamports: bigint | number;
+    /** Optional cycle counter — surfaced in relayer logs. */
+    cycle?: number;
 }
-
-export interface SwapIntent {
-    action: "swap";
-    protocol: "jupiter";
-    inputMint: string | PublicKey;
-    outputMint: string | PublicKey;
-    /** Amount in inputMint's smallest unit. */
-    amount: bigint;
-    constraints?: {
-        /** Hard cap; the enclave will not sign over the wallet's policy. */
-        maxSlippageBps?: number;
-    };
-}
-
-export interface LendIntent {
-    action: "lend";
-    protocol: "kamino" | "marginfi" | "solend";
-    mint: string | PublicKey;
-    amount: bigint;
-}
-
-export interface ArbitraryCpiIntent {
-    action: "cpi";
-    targetProgram: string | PublicKey;
-    instructionData: Uint8Array;
-    accountMetas: Array<{
-        pubkey: string | PublicKey;
-        isSigner: boolean;
-        isWritable: boolean;
-    }>;
-}
-
-// ── Execution result ─────────────────────────────────────────────────────────
 
 export interface ExecutionResult {
     /** Confirmed Solana tx signature. */
     signature: string;
-    /** Wallet nonce after the on-chain bump. */
-    walletNonce: number;
-    /** Bytes signed by the enclave (always 169 bytes, SOLORA_INTENT_V2). */
-    bytesSigned: Uint8Array;
-    /** Slot the tx confirmed in. */
-    confirmedSlot: number;
+    /** Explorer URL pre-built for the right cluster. */
+    explorerUrl: string;
+    /** Wallet nonce as of the start of this execution (pre-bump). */
+    nonceBefore: string;
+    /** Cycle counter echoed back from the request, if any. */
+    cycle?: number;
 }
-
-// ── Verification surface ─────────────────────────────────────────────────────
 
 export interface VerifyIntentInput {
     /** 169-byte canonical message. */
@@ -116,33 +72,15 @@ export interface IntentFields {
 export type IntentRejectReason =
     | "wrong_length"
     | "wrong_domain"
-    | "bad_signature"
-    | "stale_blockhash"
-    | "nonce_mismatch";
+    | "bad_signature";
 
-// ── Streaming events ─────────────────────────────────────────────────────────
+export interface RelayerHealth {
+    status: string;
+    programId: string;
+    cluster: string;
+}
 
-export type ExecutionStreamEvent =
-    | { stage: "intent"; ts: number; title: string }
-    | { stage: "policy"; ts: number; title: string }
-    | {
-          stage: "oracle";
-          ts: number;
-          feedId?: string;
-          quorum?: { valid: number; total: number };
-      }
-    | { stage: "build"; ts: number; bytes: number }
-    | { stage: "sign"; ts: number; pubkey: string }
-    | { stage: "broadcast"; ts: number; txSignature: string }
-    | {
-          stage: "verify";
-          ts: number;
-          ok: boolean;
-          error?: { code: number; name: string; description: string };
-          txSignature?: string;
-      };
-
-export interface StreamOpts {
-    /** Server-issued run identifier, returned from a prior client.execute(). */
-    runId: string;
+export interface RelayerKeys {
+    authority: string;
+    enclavePubkey: string;
 }

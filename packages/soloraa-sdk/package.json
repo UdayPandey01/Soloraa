@@ -1,7 +1,7 @@
 {
     "name": "@soloraaa/sdk",
-    "version": "0.2.0",
-    "description": "Cryptographic execution layer for autonomous AI agents on Solana. Submit structured intents to an attested enclave; on-chain verification rejects anything that doesn't match the wallet's policy.",
+    "version": "0.3.0",
+    "description": "Cryptographic execution layer for autonomous AI agents on Solana. Submit intents to an attested enclave; on-chain verification rejects anything that doesn't match the wallet's policy. Zero-setup mode points at the hosted relayer; self-hosted mode lets you run the full stack.",
     "license": "MIT",
     "type": "module",
     "main": "./dist/index.js",
@@ -14,17 +14,37 @@
     },
     "files": [
         "dist",
-        "README.md"
+        "README.md",
+        "examples"
     ],
     "scripts": {
         "build": "tsc -p tsconfig.json",
-        "typecheck": "tsc -p tsconfig.json --noEmit"
+        "typecheck": "tsc -p tsconfig.json --noEmit",
+        "test": "tsx test/verify-intent.test.ts"
+    },
+    "keywords": [
+        "solana",
+        "enclave",
+        "tee",
+        "agent",
+        "ai",
+        "marlin-oyster",
+        "ed25519",
+        "policy"
+    ],
+    "homepage": "https://github.com/uday/solora",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/uday/solora.git",
+        "directory": "packages/soloraa-sdk"
     },
     "dependencies": {
         "@noble/ed25519": "^2.3.0",
+        "@noble/hashes": "^1.6.0",
         "@solana/web3.js": "^1.98.0"
     },
     "devDependencies": {
+        "tsx": "^4.21.0",
         "typescript": "^5.7.2"
     },
     "engines": {
