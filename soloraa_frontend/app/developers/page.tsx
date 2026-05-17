@@ -21,7 +21,7 @@ export default function DevelopersPage() {
                         className="inline-flex size-1.5 rounded-full animate-pulse"
                         style={{ background: "hsl(var(--ok))" }}
                     />
-                    SDK · v0.2.0 · published
+                    SDK · v0.3.0 · published
                 </p>
                 <h1
                     className="mt-5 text-[clamp(40px,7vw,84px)] leading-[0.98] tracking-tight text-fg"
@@ -38,18 +38,17 @@ export default function DevelopersPage() {
                     your policy allows, the chain verifies before funds move.
                 </p>
 
-                {/* v0.2 callout */}
                 <div className="mt-8 rounded-2xl border border-line-bright bg-bg-surface/50 p-5 sm:p-6">
                     <p className="font-mono text-[10.5px] tracking-[0.32em] uppercase text-fg-dim">
-                        new in 0.2
+                        new in 0.3
                     </p>
                     <p className="mt-3 text-[14.5px] leading-[1.6] text-fg-soft">
-                        Real <code className="font-mono text-fg">Ed25519</code>{" "}
-                        verification via <code className="font-mono text-fg">@noble/ed25519</code>{" "}
-                        — <em className="italic">no more stubbed verifyIntent</em>. Every
-                        on-chain rejection now carries a <code className="font-mono text-fg">docUrl</code>{" "}
-                        pointing at the matching error page, so consumers don't have to
-                        grep the source to know what went wrong.
+                        Zero-setup mode: <InlineCode>new SoloraaClient()</InlineCode>{" "}
+                        with no arguments points at the hosted relayer at{" "}
+                        <code className="font-mono text-fg">relayer.soloraa.tech</code> —{" "}
+                        <em className="italic">install, call, ship</em>. The SDK now talks
+                        to the relayer instead of the enclave directly, so consumers
+                        don't have to run their own TEE to get started.
                     </p>
                 </div>
 
@@ -75,9 +74,9 @@ export default function DevelopersPage() {
                 <h2 className="text-eyebrow text-fg-dim">Install</h2>
                 <div className="mt-3">
                     <CodeBlock title="install" language="bash">
-{`npm install @soloraaa/sdk
+{`npm install @soloraaa/sdk @solana/web3.js
 # or
-pnpm add @soloraaa/sdk`}
+pnpm add @soloraaa/sdk @solana/web3.js`}
                     </CodeBlock>
                 </div>
             </section>
@@ -85,30 +84,23 @@ pnpm add @soloraaa/sdk`}
             <section className="mt-16">
                 <h2 className="text-eyebrow text-fg-dim">Five-line example</h2>
                 <p className="mt-3 text-[15px] text-fg-soft max-w-2xl">
-                    Submit a swap intent. The enclave reads on-chain wallet state, runs
-                    your policy, fetches and verifies the Pyth update, and signs only if
-                    every check passes. Your code never sees a private key.
+                    Submit an enclave-signed transfer cycle. The default constructor
+                    points at the hosted relayer — no enclave, no keypair, no env vars.
+                    Your code never sees a private key.
                 </p>
                 <div className="mt-5">
-                    <CodeBlock title="examples/swap.ts" language="ts">
-{`import { SoloraaClient } from "@soloraaa/sdk";
+                    <CodeBlock title="examples/transfer.ts" language="ts">
+{`import { Keypair } from "@solana/web3.js";
+import { SoloraaClient } from "@soloraaa/sdk";
 
-const client = new SoloraaClient({
-    rpcUrl: process.env.SOLANA_RPC_URL!,
-    enclaveUrl: process.env.SOLORA_ENCLAVE_URL!,
-    walletPda: process.env.SOLORA_WALLET_PDA!,
+const client = new SoloraaClient();
+
+const result = await client.executeTransfer({
+    destination: Keypair.generate().publicKey.toBase58(),
+    amountLamports: 2_000_000,
 });
 
-await client.execute({
-    action: "swap",
-    protocol: "jupiter",
-    inputMint: "EPjFW...USDC",
-    outputMint: "So111...SOL",
-    amount: 1000_000_000n,           // 1000 USDC
-    constraints: {
-        maxSlippageBps: 25,
-    },
-});`}
+console.log(result.signature, result.explorerUrl);`}
                     </CodeBlock>
                 </div>
             </section>
@@ -125,9 +117,9 @@ await client.execute({
                                 Intent shaping
                             </h3>
                             <p className="mt-2 text-[12.5px] leading-relaxed text-fg-muted">
-                                Your high-level action (swap, transfer, lend, rebalance)
-                                becomes a structured intent the enclave can policy-check.
-                                Account metas, token mints, decimals — all derived.
+                                Your high-level request (destination, amount, cycle tag)
+                                becomes a structured intent the relayer hands to the
+                                enclave for policy evaluation and signing.
                             </p>
                         </CardBody>
                     </Card>
@@ -137,12 +129,14 @@ await client.execute({
                                 <Cpu className="size-4" />
                             </span>
                             <h3 className="mt-5 text-[14px] font-medium text-fg">
-                                Enclave dispatch
+                                Relayer dispatch
                             </h3>
                             <p className="mt-2 text-[12.5px] leading-relaxed text-fg-muted">
-                                The SDK calls the enclave HTTP API, receives the
-                                canonical 169-byte SOLORA_INTENT_V2 message, the 64-byte
-                                Ed25519 signature, and the enclave pubkey.
+                                The SDK POSTs to{" "}
+                                <code className="font-mono text-fg">/execute-cycle</code> on
+                                the relayer. The relayer forwards to the enclave, which
+                                produces the 169-byte SOLORA_INTENT_V2 message and the
+                                64-byte Ed25519 signature.
                             </p>
                         </CardBody>
                     </Card>
@@ -152,12 +146,13 @@ await client.execute({
                                 <Webhook className="size-4" />
                             </span>
                             <h3 className="mt-5 text-[14px] font-medium text-fg">
-                                Broadcast & stream
+                                Broadcast & confirm
                             </h3>
                             <p className="mt-2 text-[12.5px] leading-relaxed text-fg-muted">
-                                Builds a Solana transaction with the Ed25519 verify ix
-                                prepended, signs as the relayer, broadcasts, and streams
-                                the lifecycle events back to the caller.
+                                The relayer assembles the on-chain transaction (Ed25519
+                                verify ix + execute_transfer), signs as the fee payer,
+                                submits to Solana, waits for confirmation, and returns
+                                the signature + explorer URL.
                             </p>
                         </CardBody>
                     </Card>
@@ -190,30 +185,32 @@ await client.execute({
             </section>
 
             <section className="mt-16">
-                <h2 className="text-display-3 text-fg">Streaming execution events</h2>
+                <h2 className="text-display-3 text-fg">Self-hosting the relayer</h2>
                 <p className="mt-3 text-[15px] text-fg-soft max-w-2xl">
-                    For long-running agents you'll want the same 7-stage lifecycle the
-                    UI shows. <InlineCode>client.stream()</InlineCode> emits typed
-                    events so you can wire them into your own observability stack.
+                    The hosted relayer at <InlineCode>relayer.soloraa.tech</InlineCode>{" "}
+                    is fine for demos and single-tenant trials. For real production,
+                    deploy your own relayer + enclave and point the SDK at it.
                 </p>
                 <div className="mt-5">
-                    <CodeBlock title="examples/stream.ts" language="ts">
-{`for await (const event of client.stream({ runId })) {
-    switch (event.stage) {
-        case "oracle":    metric("oracle.verified", { feed: event.feedId }); break;
-        case "sign":      metric("intent.signed", { pubkey: event.pubkey }); break;
-        case "verify":
-            if (event.error) {
-                // event.error.code, event.error.name, event.error.description
-                alert("on-chain rejected", event.error);
-            } else {
-                metric("intent.confirmed", { sig: event.txSignature });
-            }
-            break;
-    }
-}`}
+                    <CodeBlock title="multi-tenant.ts" language="ts">
+{`const client = new SoloraaClient({
+    relayerUrl: "https://relayer.my-deployment.com",
+    walletAuthority: "<your wallet authority pubkey>",
+    agentId: "market-maker-1",
+});
+
+await client.executeTransfer({
+    destination,
+    amountLamports: 2_000_000n,
+    cycle: 42,
+});`}
                     </CodeBlock>
                 </div>
+                <p className="mt-4 text-[14px] leading-relaxed text-fg-muted max-w-2xl">
+                    The repo's <code className="font-mono text-fg">PRODUCTION_CUTOVER.md</code>{" "}
+                    walks the four-phase deployment (local end-to-end → Marlin Oyster
+                    CVM → real Jupiter swap intents → mainnet) with commands.
+                </p>
             </section>
 
             <section className="mt-16 rounded-xl border border-line bg-bg-surface/40 p-8">

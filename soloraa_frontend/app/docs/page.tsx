@@ -5,15 +5,15 @@ import { CodeBlock, InlineCode } from "@/components/ui/code";
 export const metadata: Metadata = {
     title: "Docs",
     description:
-        "Soloraa SDK reference. Construct a client, execute intents, stream events.",
+        "Soloraa SDK reference. Construct a client, execute transfer intents, verify signatures locally.",
 };
 
 const TOC = [
     { id: "quickstart", label: "Quickstart" },
     { id: "client", label: "Client" },
-    { id: "execute", label: "execute()" },
+    { id: "execute", label: "executeTransfer()" },
     { id: "verify", label: "verifyIntent()" },
-    { id: "stream", label: "stream()" },
+    { id: "diagnostics", label: "health() & keys()" },
     { id: "errors", label: "Errors" },
     { id: "deployment", label: "Deployment" },
 ];
@@ -22,7 +22,6 @@ export default function DocsPage() {
     return (
         <div className="mx-auto max-w-7xl px-4 sm:px-6 pt-12 sm:pt-16 pb-20 sm:pb-24 lg:pt-20">
             <div className="grid gap-10 sm:gap-12 lg:grid-cols-[200px_1fr]">
-                {/* Sidebar */}
                 <aside className="lg:sticky lg:top-20 lg:self-start">
                     <p className="text-eyebrow text-fg-dim mb-3">Reference</p>
                     <ul className="space-y-1.5">
@@ -42,7 +41,7 @@ export default function DocsPage() {
                 <article className="space-y-16 max-w-3xl">
                     <header>
                         <p className="font-mono text-[11px] tracking-[0.32em] uppercase text-fg-dim">
-                            SDK · v0.2.0 · reference
+                            SDK · v0.3.0 · reference
                         </p>
                         <h1
                             className="mt-5 text-[clamp(36px,6vw,72px)] leading-[0.98] tracking-tight text-fg"
@@ -51,10 +50,9 @@ export default function DocsPage() {
                             <em className="italic text-fg-soft">@</em>soloraaa<em className="italic text-fg-soft">/</em>sdk
                         </h1>
                         <p className="mt-5 text-[15px] sm:text-[16px] leading-[1.6] text-fg-muted">
-                            A thin TypeScript client over the Soloraa enclave HTTP API
-                            and the on-chain program. Submits structured intents, returns
-                            verified results, exposes a streaming surface for long
-                            sessions.
+                            Thin TypeScript client over the Soloraa relayer. Submit
+                            transfer cycles, verify signatures locally with real
+                            Ed25519, ship a bot in 5 lines.
                         </p>
                     </header>
 
@@ -63,83 +61,87 @@ export default function DocsPage() {
 {`npm install @soloraaa/sdk @solana/web3.js`}
                         </CodeBlock>
                         <CodeBlock title="my-agent.ts" language="ts" className="mt-3">
-{`import { SoloraaClient } from "@soloraaa/sdk";
+{`import { Keypair } from "@solana/web3.js";
+import { SoloraaClient } from "@soloraaa/sdk";
 
-const client = new SoloraaClient({
-    rpcUrl: "https://api.devnet.solana.com",
-    enclaveUrl: "http://127.0.0.1:8080",
-    walletPda: "3Kh6Y1aeEE9Ss2wbR5DK24KJTDHJf3SZq7sWJkkzKR6N",
+// Zero-config: hits the hosted relayer at relayer.soloraa.tech (devnet).
+const client = new SoloraaClient();
+
+const result = await client.executeTransfer({
+    destination: Keypair.generate().publicKey.toBase58(),
+    amountLamports: 2_000_000, // ≥ rent-exempt minimum
 });
 
-const result = await client.execute({
-    action: "transfer",
-    destination: "B4D6...8nqb",
-    amount: 1_000_000n,
-});
-
-console.log("confirmed", result.signature, "nonce", result.walletNonce);`}
+console.log(result.signature);    // confirmed devnet tx
+console.log(result.explorerUrl);  // ready-to-open explorer link
+console.log(result.nonceBefore);  // wallet nonce pre-bump`}
                         </CodeBlock>
                     </Section>
 
                     <Section id="client" title="Client">
                         <p className="text-[14px] leading-relaxed text-fg-muted">
-                            The <InlineCode>SoloraaClient</InlineCode> holds the three
-                            endpoints it needs and the wallet it acts on behalf of. The
-                            client carries no signing keys — every signature comes from
-                            the enclave.
+                            <InlineCode>SoloraaClient</InlineCode> talks to a relayer
+                            URL. The relayer forwards to the enclave, which holds the
+                            sealed Ed25519 key. The client never holds any signing
+                            authority over funds.
                         </p>
                         <CodeBlock title="constructor" language="ts">
-{`new SoloraaClient({
-    rpcUrl: string,         // Solana RPC
-    enclaveUrl: string,     // /sign-* endpoints
-    walletPda: string,      // base58
-    relayerKeypair?: Keypair, // optional: pays tx fees + broadcasts
+{`new SoloraaClient(config?: {
+    relayerUrl?: string,            // default: https://relayer.soloraa.tech
+    walletAuthority?: string,       // pubkey owning the wallet PDA
+    agentId?: string,               // logged on the relayer
+    fetchImpl?: typeof fetch,       // inject custom fetch
 });`}
                         </CodeBlock>
+                        <p className="mt-3 text-[14px] leading-relaxed text-fg-muted">
+                            Pass <InlineCode>walletAuthority</InlineCode> when running
+                            against your own relayer. Leave it unset for the hosted
+                            single-tenant demo — the relayer uses its configured default.
+                        </p>
                     </Section>
 
-                    <Section id="execute" title="execute()">
+                    <Section id="execute" title="executeTransfer()">
                         <p className="text-[14px] leading-relaxed text-fg-muted">
-                            Submit an intent, get a confirmed transaction back. Each
-                            action maps to a structured request the enclave can policy-check.
+                            Submit a transfer cycle: the relayer asks the enclave to
+                            sign a 169-byte SOLORA_INTENT_V2 message, then submits
+                            <InlineCode>execute_transfer</InlineCode> on chain. Blocks
+                            until Solana reaches confirmed commitment.
                         </p>
                         <CodeBlock title="signature" language="ts">
-{`client.execute(intent: ExecutionIntent): Promise<ExecutionResult>
+{`client.executeTransfer(req: TransferRequest): Promise<ExecutionResult>
 
-type ExecutionIntent =
-  | { action: "transfer"; destination: string; amount: bigint }
-  | {
-      action: "swap";
-      protocol: "jupiter";
-      inputMint: string;
-      outputMint: string;
-      amount: bigint;
-      constraints?: { maxSlippageBps?: number };
-    }
-  | {
-      action: "lend";
-      protocol: "kamino" | "marginfi" | "solend";
-      mint: string;
-      amount: bigint;
-    };
+type TransferRequest = {
+    destination: string | PublicKey;
+    amountLamports: bigint | number;
+    cycle?: number;
+};
 
 type ExecutionResult = {
-    signature: string;       // confirmed tx signature
-    walletNonce: number;     // post-execution
-    bytesSigned: Uint8Array; // 169-byte SOLORA_INTENT_V2
+    signature: string;     // confirmed tx
+    explorerUrl: string;   // pre-built explorer link
+    nonceBefore: string;   // wallet nonce as of the signing
+    cycle?: number;        // echoed from the request
 };`}
                         </CodeBlock>
+                        <p className="mt-3 text-[13px] leading-relaxed text-fg-muted">
+                            <strong className="text-fg">Amount minimum:</strong>{" "}
+                            Solana requires receiving accounts to maintain a
+                            rent-exempt balance (~890,880 lamports). Send ≥
+                            2,000,000 lamports to a fresh destination, or reuse one
+                            that already holds SOL.
+                        </p>
                     </Section>
 
                     <Section id="verify" title="verifyIntent()">
                         <p className="text-[14px] leading-relaxed text-fg-muted">
-                            Reverse-direction check: given a 169-byte signed intent and
-                            the enclave pubkey, confirm it would pass the on-chain
-                            verifier. Useful for tooling that observes intents without
-                            broadcasting.
+                            Locally re-verify a (message, signature, pubkey) triple.
+                            Runs a real Ed25519 check via{" "}
+                            <InlineCode>@noble/ed25519</InlineCode> — never trusts the
+                            enclave's word on its own signature. Useful for replay
+                            tooling, audit logs, observer pipelines.
                         </p>
                         <CodeBlock title="signature" language="ts">
-{`client.verifyIntent(args: {
+{`client.verifyIntent(input: {
     message: Uint8Array;    // 169 bytes
     signature: Uint8Array;  // 64 bytes
     enclavePubkey: string;  // base58
@@ -147,32 +149,49 @@ type ExecutionResult = {
 
 type VerifyResult =
   | { ok: true; fields: IntentFields }
-  | { ok: false; reason: IntentRejectReason };`}
+  | { ok: false; reason: "wrong_length" | "wrong_domain" | "bad_signature" };`}
                         </CodeBlock>
                     </Section>
 
-                    <Section id="stream" title="stream()">
+                    <Section id="diagnostics" title="health() & keys()">
                         <p className="text-[14px] leading-relaxed text-fg-muted">
-                            Subscribe to lifecycle events for a long-running agent. The
-                            stream yields typed events from each of the seven pipeline
-                            stages. Backed by Server-Sent Events.
+                            Two lightweight calls for liveness checks and key discovery.
                         </p>
-                        <CodeBlock title="usage" language="ts">
-{`for await (const event of client.stream({ runId })) {
-    if (event.stage === "verify" && event.error) {
-        // typed error code from the on-chain program
-        console.error(event.error.code, event.error.name);
-    }
-}`}
+                        <CodeBlock title="diagnostics" language="ts">
+{`await client.health();
+// → { status: "ok", programId: "8tkBct...", cluster: "devnet" }
+
+await client.keys();
+// → { authority: "B4D6y...", enclavePubkey: "CNBCY3..." }`}
                         </CodeBlock>
+                        <p className="mt-3 text-[13px] leading-relaxed text-fg-muted">
+                            <code className="font-mono">keys().enclavePubkey</code> is
+                            fetched live from the relayer — handy if you've redeployed
+                            the enclave and need the new pubkey before re-registering
+                            it on the wallet PDA.
+                        </p>
                     </Section>
 
                     <Section id="errors" title="Errors">
                         <p className="text-[14px] leading-relaxed text-fg-muted">
-                            On-chain rejections surface as typed errors. Codes match the
-                            program's <InlineCode>error.rs</InlineCode>.
+                            On-chain rejections throw <InlineCode>SoloraaExecutionError</InlineCode>{" "}
+                            with <InlineCode>code</InlineCode>, <InlineCode>errorName</InlineCode>,
+                            and a <InlineCode>docUrl</InlineCode> that points at the
+                            right error page.
                         </p>
-                        <div className="mt-4 overflow-hidden rounded-xl border border-line">
+                        <CodeBlock title="catch" language="ts" className="mb-4">
+{`import { SoloraaExecutionError } from "@soloraaa/sdk";
+
+try {
+    await client.executeTransfer({ destination, amountLamports: 2_000_000n });
+} catch (err) {
+    if (err instanceof SoloraaExecutionError) {
+        console.error(err.code, err.errorName, err.docUrl);
+        // 6018  IntentNonceMismatch  https://docs.soloraa.dev/errors/intent-nonce-mismatch
+    }
+}`}
+                        </CodeBlock>
+                        <div className="overflow-hidden rounded-xl border border-line">
                             <table className="w-full text-[13px]">
                                 <thead className="bg-bg-surface/50 text-fg-dim font-mono text-[10.5px] uppercase tracking-wider">
                                     <tr className="text-left">
@@ -198,15 +217,18 @@ type VerifyResult =
 
                     <Section id="deployment" title="Deployment">
                         <p className="text-[14px] leading-relaxed text-fg-muted">
-                            The frontend and SDK both target the same on-chain program.
-                            See the repo's deployment runbook for the exact commands to
-                            stand up devnet infrastructure.
+                            By default the SDK uses the hosted relayer at{" "}
+                            <code className="font-mono text-fg">relayer.soloraa.tech</code>{" "}
+                            (devnet, single-tenant shared wallet). For real production,
+                            run your own relayer + enclave and point the SDK at it.
+                            The repo's <code className="font-mono text-fg">PRODUCTION_CUTOVER.md</code>{" "}
+                            walks the four phases with exact commands.
                         </p>
                         <Link
-                            href="/developers#deployment"
+                            href="/developers"
                             className="mt-4 inline-flex items-center gap-1.5 text-[13px] text-fg-soft hover:text-fg"
                         >
-                            See the deployment runbook →
+                            Back to the developers overview →
                         </Link>
                     </Section>
                 </article>
