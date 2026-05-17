@@ -692,14 +692,40 @@ function startLoop(
                 )
             );
 
+            const relayerUrl =
+                typeof process !== "undefined"
+                    ? process.env.NEXT_PUBLIC_SOLORA_RELAYER_URL
+                    : undefined;
             const memo = `SOLORA_EXEC|agent=${agentId}|cycle=${cycleNumber}|kind=${effect.memoKind}|notional=${effect.notionalUsdc.toFixed(2)}|ts=${Date.now()}`;
             try {
-                const result = await sendMemoWithSigner(
-                    connection,
-                    burner,
-                    memo,
-                    CLUSTER
-                );
+                let result: { signature: string; explorerUrl: string };
+                if (relayerUrl) {
+                    const resp = await fetch(`${relayerUrl}/execute-cycle`, {
+                        method: "POST",
+                        headers: { "content-type": "application/json" },
+                        body: JSON.stringify({
+                            destination: burner.publicKey.toBase58(),
+                            amountLamports: 10_000,
+                            cycle: cycleNumber,
+                            agentId,
+                        }),
+                    });
+                    if (!resp.ok) {
+                        const body = await resp.text();
+                        throw new Error(`relayer ${resp.status}: ${body}`);
+                    }
+                    result = (await resp.json()) as {
+                        signature: string;
+                        explorerUrl: string;
+                    };
+                } else {
+                    result = await sendMemoWithSigner(
+                        connection,
+                        burner,
+                        memo,
+                        CLUSTER
+                    );
+                }
                 if (!isLive()) break;
                 setStage("broadcast", "ok");
 
