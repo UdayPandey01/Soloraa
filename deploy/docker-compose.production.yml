@@ -1,0 +1,59 @@
+services:
+  enclave:
+    build:
+      context: ../solora_enclave_v2
+      dockerfile: Dockerfile
+    container_name: solora-enclave
+    restart: unless-stopped
+    user: "0:0"
+    environment:
+      SOLORA_ATTESTATION_BACKEND: unattested
+      SOLORA_ENCLAVE_BIND: 0.0.0.0:8080
+      SOLORA_SOLANA_RPC: ${SOLORA_SOLANA_RPC}
+      SOLORA_PROGRAM_ID: ${SOLORA_PROGRAM_ID}
+      SOLORA_ENCLAVE_KEY_PATH: /var/lib/solora/enclave.key
+    volumes:
+      - enclave-key:/var/lib/solora
+    expose:
+      - "8080"
+
+  relayer:
+    image: node:20-bookworm-slim
+    container_name: solora-relayer
+    restart: unless-stopped
+    working_dir: /app/solora_relayer
+    command: ["sh", "-c", "npm install --omit=dev && npx tsx server.ts"]
+    environment:
+      SOLORA_RELAYER_PORT: 8081
+      SOLORA_RELAYER_HOST: 0.0.0.0
+      SOLORA_PROGRAM_ID: ${SOLORA_PROGRAM_ID}
+      SOLANA_RPC_URL: ${SOLORA_SOLANA_RPC}
+      SOLORA_CLUSTER: ${SOLORA_CLUSTER}
+      SOLORA_ENCLAVE_URL: http://enclave:8080
+      SOLANA_KEYPAIR_PATH: /keys/relayer-fee-payer.json
+      SOLORA_IDL_PATH: /app/target/idl/solora.json
+    volumes:
+      - ../solora_relayer:/app/solora_relayer
+      - ../target/idl:/app/target/idl:ro
+      - /root/keys:/keys:ro
+    depends_on:
+      - enclave
+    expose:
+      - "8081"
+
+  caddy:
+    image: caddy:2
+    container_name: solora-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  enclave-key:
+  caddy-data:
+  caddy-config:
