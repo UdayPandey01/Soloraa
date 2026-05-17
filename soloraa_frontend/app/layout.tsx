@@ -53,6 +53,15 @@ export default function RootLayout({
             className={`${GeistSans.variable} ${GeistMono.variable} ${instrumentSerif.variable} dark`}
             suppressHydrationWarning
         >
+            <head>
+                <link
+                    rel="preload"
+                    as="video"
+                    href="/videomp_.mp4"
+                    type="video/mp4"
+                />
+                <link rel="preload" as="image" href="/obsidian.png" />
+            </head>
             <body className="antialiased min-h-screen flex flex-col">
                 <SolanaWalletProvider>
                     <Nav />

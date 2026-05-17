@@ -222,6 +222,15 @@ function Hero() {
         return () => window.removeEventListener("mousemove", onMove);
     }, []);
 
+    // Gate both video + text fade-in on the same readiness signal so they
+    // appear together. Falls back to ready=true after 600ms if the video is
+    // slow / the browser doesn't fire onCanPlay (Safari edge cases).
+    const [ready, setReady] = useState(false);
+    useEffect(() => {
+        const fallback = setTimeout(() => setReady(true), 600);
+        return () => clearTimeout(fallback);
+    }, []);
+
     return (
         <section
             ref={ref}
@@ -243,21 +252,25 @@ function Hero() {
                 <span className="mesh-indigo" />
             </div>
 
-            <video
+            <motion.video
                 autoPlay
                 muted
                 loop
                 playsInline
                 preload="auto"
                 poster="/obsidian.png"
-                className="hidden md:block absolute inset-0 w-full h-full object-cover opacity-55 pointer-events-none"
+                onCanPlay={() => setReady(true)}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: ready ? 0.55 : 0 }}
+                transition={{ duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
+                className="hidden md:block absolute inset-0 w-full h-full object-cover pointer-events-none"
                 style={{
                     transform: "scale(1.18) translate(4.5%, 3%)",
                     transformOrigin: "center center",
                 }}
             >
                 <source src="/videomp_.mp4" type="video/mp4" />
-            </video>
+            </motion.video>
             <img
                 src="/obsidian.png"
                 alt=""
@@ -284,8 +297,8 @@ function Hero() {
                     <div>
                         <motion.p
                             initial={{ opacity: 0, y: 12 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: 0.1, duration: 0.7 }}
+                            animate={ready ? { opacity: 1, y: 0 } : { opacity: 0, y: 12 }}
+                            transition={{ duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
                             className="inline-flex items-center gap-2 rounded-full border border-cream/15 bg-cream/5 px-3 py-1 font-mono text-[11px] tracking-[0.16em] uppercase text-cream-soft"
                         >
                             <span className="inline-flex size-1.5 rounded-full bg-coral animate-pulse" />
@@ -294,8 +307,12 @@ function Hero() {
 
                         <motion.h1
                             initial={{ opacity: 0, y: 30, filter: "blur(20px)" }}
-                            animate={{ opacity: 1, y: 0, filter: "blur(0)" }}
-                            transition={{ duration: 1.0, delay: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                            animate={
+                                ready
+                                    ? { opacity: 1, y: 0, filter: "blur(0)" }
+                                    : { opacity: 0, y: 30, filter: "blur(20px)" }
+                            }
+                            transition={{ duration: 0.7, delay: 0.08, ease: [0.16, 1, 0.3, 1] }}
                             className="mt-6 font-display text-[clamp(56px,11vw,180px)] leading-[0.92] tracking-tight text-cream"
                             style={{
                                 transform: `translate3d(${parallax.x * -8}px, ${parallax.y * -6}px, 0)`,
@@ -310,8 +327,8 @@ function Hero() {
 
                         <motion.p
                             initial={{ opacity: 0, y: 12 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: 0.6, duration: 0.7 }}
+                            animate={ready ? { opacity: 1, y: 0 } : { opacity: 0, y: 12 }}
+                            transition={{ duration: 0.6, delay: 0.18, ease: [0.16, 1, 0.3, 1] }}
                             className="mt-7 max-w-xl text-[16px] sm:text-[17px] leading-[1.6] text-cream-soft"
                         >
                             Solora is the cryptographic execution layer for autonomous AI on
@@ -322,8 +339,8 @@ function Hero() {
 
                         <motion.div
                             initial={{ opacity: 0, y: 12 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: 0.85, duration: 0.7 }}
+                            animate={ready ? { opacity: 1, y: 0 } : { opacity: 0, y: 12 }}
+                            transition={{ duration: 0.6, delay: 0.28, ease: [0.16, 1, 0.3, 1] }}
                             className="mt-9 flex flex-wrap items-center gap-3"
                         >
                             <MagneticLink href="/agents" primary cursorText="run agent">
@@ -337,8 +354,8 @@ function Hero() {
 
                     <motion.div
                         initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        transition={{ delay: 1.0, duration: 0.9 }}
+                        animate={{ opacity: ready ? 1 : 0 }}
+                        transition={{ duration: 0.6, delay: 0.35, ease: [0.16, 1, 0.3, 1] }}
                         className="hidden lg:block self-end pb-2"
                     >
                         <div className="border-l border-cream/20 pl-6">
