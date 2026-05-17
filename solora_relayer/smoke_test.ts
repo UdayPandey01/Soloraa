@@ -37,7 +37,7 @@ async function main() {
     check(enclave.publicKey.length === 32, "enclave.publicKey is 32 bytes");
 
     console.log("\n[2] Intent message");
-    const programId = new web3.PublicKey("DfPLBwWW72YKYt81eVUznE1amapTtXroFGTdGqHo1Ttf");
+    const programId = new web3.PublicKey("8tkBctMGe5CsGQ731t9di9hBjGg7rbMo4VEk8WujvTPS");
     const walletPda = web3.PublicKey.findProgramAddressSync(
         [Buffer.from("solora"), web3.Keypair.generate().publicKey.toBuffer()],
         programId

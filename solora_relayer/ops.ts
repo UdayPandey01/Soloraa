@@ -25,7 +25,7 @@ async function main() {
     const { HttpEnclaveClient } = await import("./enclave_client.js");
 
     const PROGRAM_ID = new web3.PublicKey(
-        process.env.SOLORA_PROGRAM_ID ?? "DfPLBwWW72YKYt81eVUznE1amapTtXroFGTdGqHo1Ttf"
+        process.env.SOLORA_PROGRAM_ID ?? "8tkBctMGe5CsGQ731t9di9hBjGg7rbMo4VEk8WujvTPS"
     );
     const RPC_URL = process.env.SOLANA_RPC_URL ?? "http://127.0.0.1:8899";
     const REGISTRY_SEED = "measurement_registry";

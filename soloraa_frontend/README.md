@@ -47,7 +47,7 @@ Vercel (recommended):
 vercel link
 vercel env add NEXT_PUBLIC_SOLANA_CLUSTER       # devnet
 vercel env add NEXT_PUBLIC_SOLANA_RPC_URL       # https://api.devnet.solana.com
-vercel env add NEXT_PUBLIC_SOLORA_PROGRAM_ID    # DfPLBwWW72YKYt81eVUznE1amapTtXroFGTdGqHo1Ttf
+vercel env add NEXT_PUBLIC_SOLORA_PROGRAM_ID    # 8tkBctMGe5CsGQ731t9di9hBjGg7rbMo4VEk8WujvTPS
 vercel --prod
 ```
 

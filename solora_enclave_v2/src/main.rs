@@ -36,7 +36,7 @@ async fn main() -> anyhow::Result<()> {
     let hermes_url =
         env::var("SOLORA_HERMES_URL").unwrap_or_else(|_| "https://hermes.pyth.network".to_string());
     let program_id_b58 = env::var("SOLORA_PROGRAM_ID")
-        .unwrap_or_else(|_| "DfPLBwWW72YKYt81eVUznE1amapTtXroFGTdGqHo1Ttf".to_string());
+        .unwrap_or_else(|_| "8tkBctMGe5CsGQ731t9di9hBjGg7rbMo4VEk8WujvTPS".to_string());
     let program_id = decode_program_id(&program_id_b58)?;
 
     let storage = FileKeyStorage::new(&key_path);

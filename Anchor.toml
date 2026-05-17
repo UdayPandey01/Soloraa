@@ -6,7 +6,7 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-solora = "DfPLBwWW72YKYt81eVUznE1amapTtXroFGTdGqHo1Ttf"
+solora = "8tkBctMGe5CsGQ731t9di9hBjGg7rbMo4VEk8WujvTPS"
 
 [provider]
 cluster = "localnet"

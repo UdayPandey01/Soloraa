@@ -18,7 +18,7 @@ use crate::attest::verify_attestation_proof;
 use crate::error::ErrorCode;
 use crate::verify::verify_enclave_intent;
 
-declare_id!("DfPLBwWW72YKYt81eVUznE1amapTtXroFGTdGqHo1Ttf");
+declare_id!("8tkBctMGe5CsGQ731t9di9hBjGg7rbMo4VEk8WujvTPS");
 
 #[program]
 pub mod solora {

@@ -7,7 +7,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LEDGER="${1:-$ROOT_DIR/.localnet}"
 RPC_PORT="${RPC_PORT:-8899}"
 PROGRAM_SO="${SOLORA_PROGRAM_SO:-$ROOT_DIR/target/deploy/solora.so}"
-PROGRAM_ID="${SOLORA_PROGRAM_ID:-DfPLBwWW72YKYt81eVUznE1amapTtXroFGTdGqHo1Ttf}"
+PROGRAM_ID="${SOLORA_PROGRAM_ID:-8tkBctMGe5CsGQ731t9di9hBjGg7rbMo4VEk8WujvTPS}"
 
 if [ ! -f "$PROGRAM_SO" ]; then
   echo "Built program not found at $PROGRAM_SO."

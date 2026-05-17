@@ -29,7 +29,7 @@ services:
     environment:
       SOLORA_ENCLAVE_BIND: 0.0.0.0:8080
       SOLORA_SOLANA_RPC: http://validator:8899
-      SOLORA_PROGRAM_ID: ${SOLORA_PROGRAM_ID:-DfPLBwWW72YKYt81eVUznE1amapTtXroFGTdGqHo1Ttf}
+      SOLORA_PROGRAM_ID: ${SOLORA_PROGRAM_ID:-8tkBctMGe5CsGQ731t9di9hBjGg7rbMo4VEk8WujvTPS}
       SOLORA_HERMES_URL: ${SOLORA_HERMES_URL:-https://hermes.pyth.network}
     ports:
       - "8080:8080"
@@ -54,7 +54,7 @@ services:
       SOLORA_ENCLAVE_URL: http://enclave:8080
       SOLANA_KEYPAIR_PATH: /keys/authority.json
       SOLORA_GOVERNOR_KEYPAIR_PATH: /keys/governor.json
-      SOLORA_PROGRAM_ID: ${SOLORA_PROGRAM_ID:-DfPLBwWW72YKYt81eVUznE1amapTtXroFGTdGqHo1Ttf}
+      SOLORA_PROGRAM_ID: ${SOLORA_PROGRAM_ID:-8tkBctMGe5CsGQ731t9di9hBjGg7rbMo4VEk8WujvTPS}
       SOLORA_MEASUREMENT_HASH: ${SOLORA_MEASUREMENT_HASH:-}
       SOLORA_PYTH_FEED_ID: ${SOLORA_PYTH_FEED_ID:-}
     volumes:

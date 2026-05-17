@@ -6,7 +6,7 @@
 
 export const PROGRAM_ID =
     process.env.NEXT_PUBLIC_SOLORA_PROGRAM_ID ??
-    "DfPLBwWW72YKYt81eVUznE1amapTtXroFGTdGqHo1Ttf";
+    "8tkBctMGe5CsGQ731t9di9hBjGg7rbMo4VEk8WujvTPS";
 
 export const CLUSTER =
     (process.env.NEXT_PUBLIC_SOLANA_CLUSTER as
