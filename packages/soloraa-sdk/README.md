@@ -172,7 +172,7 @@ Every thrown error carries the matching `docUrl` for one-click context.
 
 The hosted relayer is fine for demos and single-tenant trials, but for real
 production you should deploy your own. See
-[`PRODUCTION_CUTOVER.md`](https://github.com/uday/solora/blob/master/PRODUCTION_CUTOVER.md)
+[`PRODUCTION_CUTOVER.md`](https://github.com/UdayPandey01/Soloraa/blob/master/PRODUCTION_CUTOVER.md)
 in the main repo — it walks the four phases (local end-to-end → Marlin
 Oyster CVM → real Jupiter swap intents → mainnet).
 
